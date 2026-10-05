@@ -76,7 +76,6 @@ def resolve_host(host: str) -> str:
     return host
 
 
-# --------------------------------------------------------------------- data
 def build_status(daemon) -> dict[str, Any]:
     """Everything the page and /api/status show. Read-only."""
     from .daemon import daemon_alive
@@ -138,7 +137,6 @@ def _r(v: float | None) -> float | None:
     return round(v, 3) if v is not None else None
 
 
-# --------------------------------------------------------------------- html
 CSS = """
 :root{--red:#ff1a1a;--dark:#8b0000;--grey:#5f5f5f;--bg:#000}
 *{box-sizing:border-box}
@@ -245,7 +243,6 @@ def render_html(data: dict[str, Any], cfg: StatusPageConfig) -> str:
     return "".join(out)
 
 
-# ------------------------------------------------------------------- server
 class StatusServer:
     def __init__(self, daemon, cfg: StatusPageConfig):
         self.daemon = daemon

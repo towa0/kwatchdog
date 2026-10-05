@@ -9,8 +9,20 @@ description = "Modular terminal monitoring: asyncio daemon + Textual TUI, red on
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "towa0" }]
+keywords = ["monitoring", "uptime", "tui", "textual", "alerting", "raspberry-pi", "self-hosted"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Monitoring",
+]
 dependencies = [
-    "textual>=0.80",
+    "textual>=8.0",
     "pydantic>=2.5",
     "httpx>=0.25",
     "ruamel.yaml>=0.18",
@@ -21,7 +33,11 @@ system = ["psutil>=5.9"]
 dotenv = ["python-dotenv>=1.0"]
 toast = ["plyer>=2.1"]
 all = ["psutil>=5.9", "python-dotenv>=1.0"]
-dev = ["pytest>=7", "pytest-asyncio>=0.23", "psutil>=5.9", "python-dotenv>=1.0"]
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "psutil>=5.9", "python-dotenv>=1.0", "ruff>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/towa0/kwatchdog"
+Issues = "https://github.com/towa0/kwatchdog/issues"
 
 [project.scripts]
 kwatchdog = "kwatchdog.cli:main"
@@ -30,7 +46,13 @@ kwatchdog = "kwatchdog.cli:main"
 include = ["kwatchdog*"]
 
 [tool.setuptools.package-data]
-kwatchdog = ["tui/*.tcss", "examples/*.yaml"]
+kwatchdog = ["tui/*.tcss"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -58,7 +58,6 @@ def _store(path: Path):
         return Store(Settings().path("db"))
 
 
-# ------------------------------------------------------------------ commands
 def cmd_daemon(args: argparse.Namespace) -> int:
     from .core.config import Settings
     from .core.daemon import Daemon, setup_logging

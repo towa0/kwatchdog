@@ -25,6 +25,10 @@
 
 # kwatchdog
 
+[![CI](https://github.com/towa0/kwatchdog/actions/workflows/ci.yml/badge.svg)](https://github.com/towa0/kwatchdog/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-ff1a1a)
+![License: MIT](https://img.shields.io/badge/license-MIT-8b0000)
+
 **Modular terminal monitoring.** An asyncio daemon runs checks on schedules and
 writes to SQLite; a red-on-black [Textual](https://textual.textualize.io) TUI
 reads that state live. Watchers and notification channels are plugins. Runs on
@@ -54,8 +58,10 @@ fake failing service. The pulsing border is caught mid-pulse.</sub>
 ## Install
 
 ```bash
-pip install -e ".[all]"        # from a checkout; [all] = psutil + python-dotenv
-# or: pipx install "git+https://…/kwatchdog.git#egg=kwatchdog[all]"
+git clone https://github.com/towa0/kwatchdog && cd kwatchdog
+pip install -e ".[all]"        # [all] = psutil + python-dotenv
+# or, without cloning:
+pipx install "kwatchdog[all] @ git+https://github.com/towa0/kwatchdog"
 ```
 
 Optional extras: `psutil` (process + system watchers), `python-dotenv` (a basic
@@ -618,6 +624,14 @@ the dog.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 110 tests: every watcher (mocked), alert rules, config
-                          # reload, plugin loading, daemon, CLI, TUI (headless)
+ruff check kwatchdog tests
+pytest -q                 # 150 tests: every watcher (mocked), alert rules, dependencies,
+                          # autofix, status page, digest/budgets, config reload, plugin
+                          # loading, daemon, CLI, TUI (headless)
 ```
+
+CI runs the same on Ubuntu and Windows with Python 3.10 and 3.13.
+
+## License
+
+[MIT](LICENSE)

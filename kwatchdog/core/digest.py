@@ -51,7 +51,6 @@ class DigestConfig(BaseModel):
         return f"{h:02d}:{m:02d}"
 
 
-# ------------------------------------------------------------------- budgets
 @dataclass
 class Budget:
     key: str
@@ -112,7 +111,6 @@ def evaluate_budget(store: "Store", key: str, slo: float, now: float, lookback: 
     return Budget(key, slo, state, mtd["uptime"], projected_uptime, budget_s, used_s, burn)
 
 
-# -------------------------------------------------------------------- digest
 def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
                  dcfg: DigestConfig | None = None, localtime: LocalTime | None = None,
                  daemon_started: float | None = None) -> tuple[Status, str]:
@@ -133,7 +131,6 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
     lines.append(f"kwatchdog digest · {lt(now):%a %d %b %H:%M}")
     lines.append("now: " + " · ".join(f"{n} {s.value}" for s, n in sorted(counts.items(), key=lambda x: -x[0].rank)))
 
-    # incidents since the last digest
     keys = {w.key for w in specs}
     incs = [i for i in store.incidents(limit=500) if i.opened >= since and i.key in keys]
     span = fmt_age(now - since)
@@ -147,7 +144,6 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
     else:
         lines.append(f"\nINCIDENTS last {span}: none")
 
-    # uptime per project (24h)
     parts = []
     for p in cfg.projects.values():
         ups = [s["uptime"] for s in (store.stats(w.key, now - 86400) for w in p.watchers) if s["uptime"] is not None]
@@ -185,7 +181,6 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
         lines.append(f"\nSILENTLY STALE ({len(stale)})")
         lines += [f"  {s}" for s in stale]
 
-    # budgets
     budget_lines = []
     for w in specs:
         if w.slo:
@@ -197,7 +192,6 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
         lines.append("\nUPTIME BUDGETS (month)")
         lines += budget_lines
 
-    # autofix
     runs = [r for r in store.runs(limit=500) if r["ts"] >= since]
     mode = get_mode(store) if cfg.settings.autofix else "off (config)"
     if runs or mode != "on":
@@ -218,7 +212,6 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
     return overall, "\n".join(out)
 
 
-# --------------------------------------------------------------- scheduling
 class Digester:
     """Time-driven part, called from the daemon's ticker."""
 

@@ -63,7 +63,6 @@ class Remediator:
             return "off"
         return get_mode(self.store)
 
-    # ------------------------------------------------------------- triggering
     async def after_result(self, spec: "WatcherSpec", st: AlertState, result: Result, muted: bool) -> None:
         """Called after every result. Attempts a fix while an incident is open in ALERT."""
         oa = spec.on_alert
@@ -139,7 +138,6 @@ class Remediator:
         self._spawn(spec, rem, rid)
         return f"run {rid} confirmed"
 
-    # --------------------------------------------------------------- running
     async def _execute(self, spec: "WatcherSpec", rem: "Remediation", rid: int) -> None:
         lock = self._locks.setdefault(spec.key, asyncio.Lock())
         async with lock:

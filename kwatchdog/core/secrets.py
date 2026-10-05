@@ -18,10 +18,6 @@ SECRET_KEY_RE = re.compile(r"(token|secret|password|passwd|api_key|apikey|webhoo
 _secret_values: set[str] = set()
 
 
-class MissingEnvVar(KeyError):
-    pass
-
-
 def load_dotenv_files(*paths: Path) -> list[Path]:
     """Load .env files (without overriding real env). Works without python-dotenv."""
     loaded = []

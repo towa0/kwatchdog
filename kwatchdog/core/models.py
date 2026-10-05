@@ -92,6 +92,3 @@ def fmt_age(seconds: float | None) -> str:
         return f"{s // 3600}h{(s % 3600) // 60:02d}m"
     return f"{s // 86400}d{(s % 86400) // 3600}h"
 
-
-def watcher_key(project: str, watcher: str) -> str:
-    return f"{project}/{watcher}"

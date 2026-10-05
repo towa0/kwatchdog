@@ -93,7 +93,6 @@ class Daemon:
         self.dep_refresh_age = 10.0
         self.first_run_delay: float | None = None  # None = stagger first checks randomly over <= 3 s  # re-check a dependency first if its result is older than this
 
-    # ------------------------------------------------------------------ setup
     def _registries(self) -> tuple[Registry[Watcher], Registry[Channel]]:
         if self._wreg is None or self._creg is None:
             plugins = self.config.settings.path("plugins_dir") if self.config else None
@@ -194,7 +193,6 @@ class Daemon:
         self.watchers.pop(key, None)
         self.run_now.pop(key, None)
 
-    # ------------------------------------------------------------------- loops
     async def _loop(self, key: str) -> None:
         spec = self.specs[key]
         # stagger first runs so a big config doesn't stampede
@@ -272,7 +270,6 @@ class Daemon:
         await self.handle_result(spec, result)
         return result
 
-    # ------------------------------------------------------------ dependencies
     async def _refresh_dependencies(self, spec: WatcherSpec) -> None:
         """A dependent just failed: make sure its dependencies' verdicts are fresh (or wait for
         the check already in flight), so the root cause alerts before the dependents do."""
@@ -546,7 +543,6 @@ class Daemon:
     def _port(self) -> int | None:
         return self._server.sockets[0].getsockname()[1] if self._server and self._server.sockets else None
 
-    # ------------------------------------------------------------ status page
     async def _ensure_status_server(self) -> None:
         sp = self.config.status_page
         self._status_cfg = sp.model_dump_json()
@@ -565,7 +561,6 @@ class Daemon:
                 errs = self.store.kv_get(CONFIG_ERRORS, []) or []
                 self.store.kv_set(CONFIG_ERRORS, errs + [f"status page not started: {e}"])
 
-    # ------------------------------------------------------- heartbeat endpoint
     async def _serve(self) -> None:
         st = self.config.settings
         if not self.serve_heartbeat or st.heartbeat_port is None:
@@ -605,7 +600,6 @@ class Daemon:
         finally:
             writer.close()
 
-    # --------------------------------------------------------------------- run
     async def start(self) -> None:
         cfg = self.load()
         if cfg is None:

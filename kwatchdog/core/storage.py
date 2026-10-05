@@ -166,7 +166,6 @@ class Store:
     def _x(self, sql: str, args: Iterable[Any] = ()) -> sqlite3.Cursor:
         return self.db.execute(sql, tuple(args))
 
-    # ----------------------------------------------------------------- results
     def record_result(self, key: str, r: Result, *, keep_raw: int = 4000) -> None:
         raw = redact(r.raw or "")[:keep_raw]
         msg = redact(r.message or "")
@@ -255,7 +254,6 @@ class Store:
             "alert": sum(1 for r in counted if r[0] == Status.ALERT.value),
         }
 
-    # ------------------------------------------------------------ watcher state
     def watcher_rows(self) -> dict[str, WatcherRow]:
         out = {}
         for r in self._x("SELECT * FROM watcher_state").fetchall():
@@ -287,7 +285,6 @@ class Store:
             if k not in keep:
                 self._x("DELETE FROM watcher_state WHERE wkey=?", (k,))
 
-    # ---------------------------------------------------------------- incidents
     def open_incident(self, key: str, ts: float, status: Status, message: str) -> int:
         cur = self._x("INSERT INTO incidents (wkey, opened, status, message) VALUES (?,?,?,?)",
                       (key, ts, status.value, redact(message)))
@@ -309,7 +306,6 @@ class Store:
         return [IncidentRow(r["id"], r["wkey"], r["opened"], r["closed"], Status(r["status"]),
                             r["message"] or "", bool(r["escalated"])) for r in rows.fetchall()]
 
-    # ------------------------------------------------------------------- events
     def add_event(self, key: str, kind: str, status: str, message: str, delivered: str = "", ts: float | None = None) -> None:
         self._x("INSERT INTO events (ts, wkey, kind, status, message, delivered) VALUES (?,?,?,?,?,?)",
                 (ts or time.time(), key, kind, status, redact(message), delivered))
@@ -319,7 +315,6 @@ class Store:
         return [EventRow(r["id"], r["ts"], r["wkey"] or "", r["kind"], r["status"], r["message"] or "",
                          r["delivered"] or "") for r in rows]
 
-    # ----------------------------------------------------------------- commands
     def push_command(self, kind: str, target: str = "", arg: str = "") -> None:
         self._x("INSERT INTO commands (ts, kind, target, arg) VALUES (?,?,?,?)", (time.time(), kind, target, arg))
 
@@ -330,7 +325,6 @@ class Store:
                     (time.time(), *[r[0] for r in rows]))
         return [(r[1], r[2] or "", r[3] or "") for r in rows]
 
-    # ----------------------------------------------------------------------- kv
     def kv_get(self, k: str, default: Any = None) -> Any:
         row = self._x("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
         return json.loads(row[0]) if row else default
@@ -338,7 +332,6 @@ class Store:
     def kv_set(self, k: str, v: Any) -> None:
         self._x("INSERT INTO kv (k, v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, json.dumps(v)))
 
-    # --------------------------------------------------------------- heartbeats
     def beat(self, name: str, ts: float | None = None) -> None:
         self._x("""INSERT INTO heartbeats (name, ts, count) VALUES (?,?,1)
                    ON CONFLICT(name) DO UPDATE SET ts=excluded.ts, count=count+1""", (name, ts or time.time()))
@@ -347,8 +340,6 @@ class Store:
         row = self._x("SELECT ts FROM heartbeats WHERE name=?", (name,)).fetchone()
         return row[0] if row else None
 
-    # ------------------------------------------------------------- maintenance
-    # ----------------------------------------------------------- remediation
     def add_run(self, key: str, action: str, command: str, mode: str, ts: float | None = None) -> int:
         cur = self._x("INSERT INTO remediation_runs (ts, wkey, action, command, mode) VALUES (?,?,?,?,?)",
                       (ts or time.time(), key, action, redact(command), mode))

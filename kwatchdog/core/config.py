@@ -69,6 +69,7 @@ def parse_quiet_hours(spec: str) -> tuple[int, int]:
     """'23:00-07:00' -> (1380, 420) minutes since midnight."""
     try:
         a, b = spec.split("-")
+
         def mins(s: str) -> int:
             h, m = s.strip().split(":")
             h, m = int(h), int(m)
@@ -291,7 +292,6 @@ def load_config(
             msg = _fmt_validation(e) if isinstance(e, ValidationError) else str(e)
             cfg.errors.append(f"alerts.{rname}: {msg}")
 
-    # read-only status page
     sp_raw = raw.get("status_page") or {}
     missing_sp: list[str] = []
     sp_body = secrets.expand(sp_raw, missing=missing_sp) if isinstance(sp_raw, dict) else sp_raw
@@ -312,7 +312,6 @@ def load_config(
             cfg.errors.append(f"status_page: {msg} - status page disabled")
             cfg.status_page = StatusPageConfig(enabled=False)
 
-    # daily digest
     try:
         cfg.digest = DigestConfig.model_validate(raw.get("digest") or {})
     except (ValidationError, TypeError) as e:
@@ -336,11 +335,9 @@ def load_config(
         except ValidationError as e:
             cfg.errors.append(f"remediations.{rname}: {_fmt_validation(e)}")
 
-    # channels
     for cname, cbody in (raw.get("channels") or {}).items():
         cfg.channels[cname] = _load_channel(cname, cbody, channel_registry, cfg)
 
-    # projects
     projects_raw = raw.get("projects") or {}
     if not isinstance(projects_raw, dict):
         cfg.errors.append("projects: must be a mapping of project-name -> project")
@@ -576,7 +573,6 @@ def _load_channel(name: str, body: Any, reg: Registry[Channel], cfg: AppConfig) 
     return spec
 
 
-# --------------------------------------------------------------------------- editing
 # Round-trip edits keep the user's comments and ordering.
 
 def _rt() -> YAML:
@@ -645,19 +641,6 @@ def upsert_watcher(path: Path, project: str, body: dict[str, Any], *, original_n
             raise ConfigError(f"watcher '{original_name}' not found in '{project}'")
         watchers.append(body)
     _write_rt(path, data)
-
-
-def set_watcher_enabled(path: Path, project: str, name: str, enabled: bool) -> None:
-    data = _read_rt(path)
-    for w in (data.get("projects") or {}).get(project, {}).get("watchers") or []:
-        if isinstance(w, dict) and str(w.get("name") or w.get("type")) == name:
-            if enabled and "enabled" in w:
-                del w["enabled"]
-            elif not enabled:
-                w["enabled"] = False
-            _write_rt(path, data)
-            return
-    raise ConfigError(f"watcher {project}/{name} not found")
 
 
 def raw_watcher(path: Path, project: str, name: str) -> dict[str, Any] | None:

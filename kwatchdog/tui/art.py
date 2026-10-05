@@ -1,8 +1,3 @@
-"""Doberman head (profile, cropped ears, snarl) for the splash + About screens.
-
-Generated from a vector silhouette (coverage-ramp ASCII); ``MASK`` assigns a
-style per character: h=head, t=tan markings, f=fangs, c=collar, e=eye/studs.
-"""
 from __future__ import annotations
 
 from rich.text import Text
@@ -56,7 +51,7 @@ hhhhhhhhhhhhhhhhhhhhhhhhhhhh
 """
 
 TITLE = "K W A T C H D O G"
-TAGLINE = "always awake. never friendly."
+TAGLINE = "Who’s a good daemon?"
 
 STYLES = {
     "h": "#ff1a1a",
@@ -65,9 +60,6 @@ STYLES = {
     "c": "#8b0000",
     "e": "bold #ff1a1a",
 }
-
-WIDTH = 49
-HEIGHT = 22
 
 
 def doberman_text() -> Text:

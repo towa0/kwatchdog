@@ -38,7 +38,6 @@ def _sqlite_scalar(db: str, sql: str) -> Any:
         con.close()
 
 
-# ----------------------------------------------------------------- scraper health
 class ScraperConfig(WatcherConfig):
     # source A: a SQLite DB the scraper writes to
     db: str | None = None
@@ -53,7 +52,6 @@ class ScraperConfig(WatcherConfig):
     last_success_key: str = "last_success"
     errors_key: str = "errors"
     requests_key: str = "requests"
-    # rules
     baseline_runs: int = Field(10, ge=2)
     warn_drop_percent: float = 30
     alert_drop_percent: float = 60
@@ -141,7 +139,6 @@ class ScraperWatcher(Watcher):
         return Result.ok(", ".join(msg_parts) or "ok", metrics=metrics, raw=raw)
 
 
-# ------------------------------------------------------ SQLite / CSV freshness
 class DataFileConfig(WatcherConfig):
     path: str
     format: str | None = None  # sqlite | csv (guessed from extension)
@@ -236,7 +233,6 @@ class DataFileWatcher(Watcher):
         return Result.ok(", ".join(parts), metrics=metrics)
 
 
-# ------------------------------------------------------------ JSON metric
 class JsonMetricConfig(Thresholds):
     url: str | None = None
     file: str | None = None
@@ -268,7 +264,6 @@ class JsonMetricWatcher(Watcher):
         return Result(status, msg, {"value": value}, raw=json.dumps(data, default=str)[:2000])
 
 
-# ------------------------------------------------------------ price threshold
 class PriceConfig(Thresholds):
     url: str | None = None
     file: str | None = None

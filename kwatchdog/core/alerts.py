@@ -84,7 +84,6 @@ class AlertEngine:
     def __init__(self, localtime: Callable[[float], dt.datetime] | None = None):
         self.localtime = localtime
 
-    # ------------------------------------------------------------------ helpers
     def _quiet(self, rule: AlertRule, now: float) -> bool:
         return in_quiet_hours(rule.quiet_hours, now, self.localtime)
 
@@ -101,7 +100,6 @@ class AlertEngine:
         return Action(kind, status, message, notify=True, channels=list(channels if channels is not None else rule.channels),
                       quiet=quiet, duration_s=duration)
 
-    # --------------------------------------------------------------------- main
     def process(self, st: AlertState, r: Result, rule: AlertRule, now: float | None = None,
                 *, muted: bool = False) -> list[Action]:
         now = r.ts if now is None else now

@@ -211,9 +211,6 @@ class Registry(Generic[T]):
     def get(self, type_: str) -> type[T] | None:
         return self.items.get(type_)
 
-    def available(self) -> dict[str, type[T]]:
-        return {k: v for k, v in self.items.items() if v.unavailable_reason() is None}
-
 
 def load_external_plugins(directory: Path, registries: list[Registry]) -> dict[str, str]:
     """Import every ``*.py`` in ``directory`` and scan it into each registry.

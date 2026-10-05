@@ -7,3 +7,11 @@ __pycache__/
 .env
 build/
 dist/
+.ruff_cache/
+.coverage
+htmlcov/
+*.log
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

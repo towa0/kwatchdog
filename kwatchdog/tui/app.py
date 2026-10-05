@@ -181,7 +181,6 @@ class WatchdogApp(App):
         self._last_event_id = max((e.id for e in self.store.events(1)), default=0)
         self._pulse = False
 
-    # ----------------------------------------------------------------- lifecycle
     async def on_mount(self) -> None:
         self.register_theme(THEME)
         self.theme = "kwatchdog"
@@ -213,7 +212,6 @@ class WatchdogApp(App):
     def _bell_hook(self, n: Notification) -> None:
         self.bell()
 
-    # ------------------------------------------------------------------- view
     @property
     def main(self) -> MainScreen | None:
         for s in self.screen_stack:
@@ -403,7 +401,6 @@ class WatchdogApp(App):
                     "information" if e.kind == "recovery" else "warning")
                 self.notify(e.message[:200], title=f"{e.kind.upper()} {e.key}", severity=sev, markup=False)
 
-    # ------------------------------------------------------------- selection
     @on(Tree.NodeHighlighted)
     def _tree_hl(self, event: Tree.NodeHighlighted) -> None:
         data = event.node.data
@@ -449,7 +446,6 @@ class WatchdogApp(App):
         if key and "/" in key:
             self.push_screen(DetailScreen(key, self.store))
 
-    # ---------------------------------------------------------------- actions
     def run_check(self, key: str) -> None:
         if not key:
             return
