@@ -7,7 +7,6 @@ import pytest
 from kwatchdog.cli import main as cli_main
 from kwatchdog.core.config import load_config
 from kwatchdog.core.daemon import Daemon
-from kwatchdog.core.models import Status
 from kwatchdog.core.remediation import get_mode, set_mode
 from kwatchdog.core.storage import Store
 
@@ -42,6 +41,7 @@ def make_daemon(tmp_path, regs):  # noqa: F811
         p.write_text(config(tmp_path, on_alert, **kw))
         d = Daemon(p, store=Store(tmp_path / "a.db"), watcher_registry=regs[0], channel_registry=regs[1],
                    serve_heartbeat=False)
+        d.first_run_delay = 3600  # tests drive checks manually
         await d.start()
         made.append(d)
         return d

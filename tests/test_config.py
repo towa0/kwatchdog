@@ -139,7 +139,7 @@ def test_roundtrip_edit_keeps_comments(tmp_path, regs):
 def test_example_config_is_valid(regs, monkeypatch):
     from pathlib import Path
 
-    for var in ("NTFY_TOPIC", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "DISCORD_WEBHOOK", "SMTP_USER", "SMTP_PASSWORD"):
+    for var in ("STATUS_TOKEN", "NTFY_TOPIC", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "DISCORD_WEBHOOK", "SMTP_USER", "SMTP_PASSWORD"):
         monkeypatch.setenv(var, "dummy-value")
     cfg = load_config(Path(__file__).parent.parent / "examples" / "config.yaml", *regs)
     assert cfg.errors == []

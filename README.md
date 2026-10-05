@@ -320,6 +320,49 @@ The rules:
   notifications. **Disable** (`d`) stops the checks.
 * Channel `min_severity: ALERT` keeps WARN noise off that channel.
 
+## Status page + JSON API (read-only)
+
+```yaml
+status_page:
+  host: 127.0.0.1          # default; "lan" = 0.0.0.0, "tailscale" = this machine's 100.x address
+  port: 8788
+  token: ${STATUS_TOKEN}   # optional bearer token; set it for lan/tailscale
+  refresh: 15              # page auto-refresh, seconds
+```
+
+Open `http://127.0.0.1:8788/`. The page is red-on-black and works on a phone.
+It shows the same project tree as the TUI (status, last check, latency, uptime
+24h/7d per watcher and per project), open incidents and recent incidents. It
+pulses when anything is in ALERT and refreshes itself, with no JavaScript.
+
+| endpoint | returns |
+|---|---|
+| `GET /` | the page |
+| `GET /api/status` | everything the page shows, as JSON |
+| `GET /api/incidents` | open + recent incidents |
+| `GET /api/watchers/<project>/<name>` | one watcher + its last 50 results |
+| `GET /healthz` | `{"ok": true}`. No token needed, reveals nothing |
+
+* **Read-only.** Only GET and HEAD are accepted (anything else gets 405) and no
+  endpoint changes state. Raw check output and autofix output are never
+  exposed.
+* **Token.** `Authorization: Bearer <token>`, for `curl` and scripts. On a
+  phone, open `/?token=<token>` once. The server answers with an HttpOnly,
+  SameSite=Strict cookie and redirects to `/`, so the token doesn't stay in
+  the address bar. Tokens are compared in constant time.
+* **Binding.** Loopback by default. With `host: lan` and no token, `watchdog
+  validate` warns you. `host: tailscale` asks `tailscale ip -4` for the
+  address. If that fails, the page is **not** started (it never falls back to
+  0.0.0.0) and the error shows in the TUI banner. Plain HTTP is fine over
+  Tailscale (WireGuard encrypts it). Don't expose it to the internet without a
+  TLS reverse proxy.
+* Every value is HTML-escaped, and the CSP is `default-src 'none'`, so a
+  scraped page can't inject markup or scripts into the status page.
+
+| phone | desktop |
+|---|---|
+| ![status page on a phone](docs/status-mobile.png) | ![status page on desktop](docs/status-desktop.png) |
+
 ## Secrets
 
 Secrets never go in YAML. Reference them as `${VAR}` or `${VAR:-default}`,

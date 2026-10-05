@@ -9,6 +9,11 @@ settings:
   default_interval: 60s
   default_timeout: 10s
 
+status_page:                  # read-only page + JSON API
+  host: tailscale             # 127.0.0.1 (default) | lan | tailscale | an IP
+  port: 8788
+  token: ${STATUS_TOKEN}
+
 channels:
   bell:
     type: bell

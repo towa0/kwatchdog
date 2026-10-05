@@ -83,6 +83,7 @@ async def daemon(tmp_path, regs):
     store = Store(tmp_path / "w.db")
     d = Daemon(cfg, store=store, watcher_registry=regs[0], channel_registry=regs[1],
                serve_heartbeat=False, reload_poll=0.1)
+    d.first_run_delay = 3600  # tests drive checks manually
     await d.start()
     yield d
     await d.stop()
@@ -181,6 +182,7 @@ async def test_unavailable_watcher_is_sleeping(tmp_path, regs):
     cfg = tmp_path / "c.yaml"
     cfg.write_text("settings: {heartbeat_port: null}\nprojects: {p: {watchers: [{name: x, type: needsdep}]}}\n")
     d = Daemon(cfg, store=Store(tmp_path / "x.db"), watcher_registry=regs[0], channel_registry=regs[1])
+    d.first_run_delay = 3600  # tests drive checks manually
     await d.start()
     try:
         row = d.store.watcher_row("p/x")
@@ -210,6 +212,7 @@ async def test_heartbeat_endpoint(tmp_path, regs):
               - {name: hb, type: heartbeat, ping: nightly, max_silence: 1h, interval: 3600}
     """))
     d = Daemon(cfg, store=Store(tmp_path / "h.db"), watcher_registry=regs[0], channel_registry=regs[1])
+    d.first_run_delay = 3600  # tests drive checks manually
     await d.start()
     try:
         port = d._port()
@@ -234,6 +237,7 @@ async def test_escalation_via_ticker_and_quiet_channel(tmp_path, regs):
         projects: {p: {watchers: [{name: a, type: fake, interval: 3600}]}}
     """))
     d = Daemon(cfg, store=Store(tmp_path / "e.db"), watcher_registry=regs[0], channel_registry=regs[1])
+    d.first_run_delay = 3600  # tests drive checks manually
     await d.start()
     try:
         SCRIPT["a"] = ["ALERT"]

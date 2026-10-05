@@ -20,6 +20,7 @@ from ruamel.yaml import YAML
 from . import secrets
 from .models import Duration, Status
 from .plugin import Channel, PluginConfig, Registry, Watcher
+from .web import StatusPageConfig, is_loopback
 
 
 class ConfigError(Exception):
@@ -153,6 +154,7 @@ class WatcherSpec:
     error: str | None = None  # config error -> watcher can't run
     unavailable: str | None = None  # missing dep / wrong platform -> disabled
     on_alert: OnAlert | None = None
+    slo: float | None = None  # monthly uptime target in percent (e.g. 99.9)
     depends_on_raw: list[str] = field(default_factory=list)  # as written (watcher, project/watcher, project)
     depends_on: list[str] = field(default_factory=list)  # resolved watcher keys
 
@@ -201,6 +203,7 @@ class AppConfig:
     channels: dict[str, ChannelSpec] = field(default_factory=dict)
     rules: dict[str, AlertRule] = field(default_factory=lambda: {"default": AlertRule()})
     remediations: dict[str, Remediation] = field(default_factory=dict)
+    status_page: StatusPageConfig = field(default_factory=StatusPageConfig)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -262,7 +265,7 @@ def load_config(
 
     cfg = AppConfig(path=path)
     cfg.warnings.extend(secrets.literal_secret_warnings(raw))
-    unknown = set(raw) - {"settings", "channels", "alerts", "projects", "remediations"}
+    unknown = set(raw) - {"settings", "channels", "alerts", "projects", "remediations", "status_page", "digest"}
     for k in sorted(unknown):
         cfg.errors.append(f"unknown top-level key '{k}'")
 
@@ -284,6 +287,27 @@ def load_config(
         except (ValidationError, TypeError) as e:
             msg = _fmt_validation(e) if isinstance(e, ValidationError) else str(e)
             cfg.errors.append(f"alerts.{rname}: {msg}")
+
+    # read-only status page
+    sp_raw = raw.get("status_page") or {}
+    missing_sp: list[str] = []
+    sp_body = secrets.expand(sp_raw, missing=missing_sp) if isinstance(sp_raw, dict) else sp_raw
+    if missing_sp:
+        cfg.errors.append(f"status_page: environment variable(s) not set: {', '.join(sorted(set(missing_sp)))}"
+                          " - status page disabled")
+        cfg.status_page = StatusPageConfig(enabled=False)
+    else:
+        try:
+            cfg.status_page = StatusPageConfig.model_validate(sp_body)
+            if cfg.status_page.token:
+                secrets.register_secret(cfg.status_page.token)
+            if cfg.status_page.enabled and not is_loopback(cfg.status_page.host) and not cfg.status_page.token:
+                cfg.warnings.append(f"status_page: host '{cfg.status_page.host}' is reachable from other machines "
+                                    "and has no token; set token: ${STATUS_TOKEN}")
+        except (ValidationError, TypeError) as e:
+            msg = _fmt_validation(e) if isinstance(e, ValidationError) else str(e)
+            cfg.errors.append(f"status_page: {msg} - status page disabled")
+            cfg.status_page = StatusPageConfig(enabled=False)
 
     # allowlisted remediation commands
     rem_raw = raw.get("remediations") or {}

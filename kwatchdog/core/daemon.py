@@ -12,6 +12,7 @@ import logging
 import logging.handlers
 import os
 import random
+import subprocess
 import time
 import traceback
 from pathlib import Path
@@ -25,6 +26,7 @@ from .models import Result, Status
 from .plugin import Channel, Notification, Registry, Watcher, WatcherContext, registries
 from .remediation import Remediator
 from .storage import Store
+from .web import StatusServer
 
 log = logging.getLogger("kwatchdog.daemon")
 
@@ -84,7 +86,10 @@ class Daemon:
         self.on_notification = None  # optional callback(Notification) (embedded TUI)
         self._refreshing: set[str] = set()
         self.remediator = Remediator(self)
-        self.dep_refresh_age = 10.0  # re-check a dependency first if its result is older than this
+        self.status_server: StatusServer | None = None
+        self._status_cfg: str | None = None
+        self.dep_refresh_age = 10.0
+        self.first_run_delay: float | None = None  # None = stagger first checks randomly over <= 3 s  # re-check a dependency first if its result is older than this
 
     # ------------------------------------------------------------------ setup
     def _registries(self) -> tuple[Registry[Watcher], Registry[Channel]]:
@@ -152,6 +157,8 @@ class Daemon:
                     self.channels[name] = cls(name, cs.config)
         if old_cfg.path is not None:
             log.info("config reloaded: %d watchers, %d channels", len(new), len(self.channels))
+            if self._bg and cfg.status_page.model_dump_json() != self._status_cfg:
+                self._bg.append(asyncio.create_task(self._ensure_status_server()))
 
     def _start_watcher(self, spec: WatcherSpec) -> None:
         assert self.store is not None
@@ -187,7 +194,8 @@ class Daemon:
     async def _loop(self, key: str) -> None:
         spec = self.specs[key]
         # stagger first runs so a big config doesn't stampede
-        first_delay = random.uniform(0, min(3.0, spec.interval / 4))
+        first_delay = (random.uniform(0, min(3.0, spec.interval / 4)) if self.first_run_delay is None
+                       else self.first_run_delay)
         delay = first_delay
         while True:
             ev = self.run_now.get(key)
@@ -495,7 +503,8 @@ class Daemon:
             if self.store:
                 self.store.kv_set(DAEMON_META, {"pid": os.getpid(), "ts": time.time(), "started": self.started,
                                                 "config": str(self.config_path),
-                                                "heartbeat_port": self._port()})
+                                                "heartbeat_port": self._port(),
+                                                "status_url": self.status_server.url if self.status_server else None})
                 if n % 1800 == 0:
                     try:
                         self.store.prune(self.config.settings.retention_days)
@@ -506,6 +515,25 @@ class Daemon:
 
     def _port(self) -> int | None:
         return self._server.sockets[0].getsockname()[1] if self._server and self._server.sockets else None
+
+    # ------------------------------------------------------------ status page
+    async def _ensure_status_server(self) -> None:
+        sp = self.config.status_page
+        self._status_cfg = sp.model_dump_json()
+        if self.status_server:
+            self.status_server.close()
+            self.status_server = None
+        if not self.serve_heartbeat or not sp.enabled:
+            return
+        server = StatusServer(self, sp)
+        try:
+            await server.start()
+            self.status_server = server
+        except (OSError, subprocess.SubprocessError) as e:
+            log.error("status page disabled: %s", e)
+            if self.store:
+                errs = self.store.kv_get(CONFIG_ERRORS, []) or []
+                self.store.kv_set(CONFIG_ERRORS, errs + [f"status page not started: {e}"])
 
     # ------------------------------------------------------- heartbeat endpoint
     async def _serve(self) -> None:
@@ -556,6 +584,7 @@ class Daemon:
             cfg = AppConfig(path=self.config_path)
         self.apply(cfg)
         await self._serve()
+        await self._ensure_status_server()
         for coro in (self._config_watch(), self._commands(), self._ticker(), self._beat()):
             self._bg.append(asyncio.create_task(coro))
         log.info("daemon started: %d watchers", len(self.specs))
@@ -571,6 +600,8 @@ class Daemon:
         self._bg.clear()
         if self._server:
             self._server.close()
+        if self.status_server:
+            self.status_server.close()
         if self._http:
             await self._http.aclose()
             self._http = None

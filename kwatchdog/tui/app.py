@@ -252,6 +252,8 @@ class WatchdogApp(App):
             port = snap.daemon.get("heartbeat_port")
             if port:
                 t.append(f":{port} ", style=GRAY)
+            if snap.daemon.get("status_url"):
+                t.append(f"{snap.daemon['status_url']} ", style=GRAY)
         else:
             t.append("  daemon SLEEPING - run `watchdog daemon` ", style=f"bold {RED}")
         t.append("  ")

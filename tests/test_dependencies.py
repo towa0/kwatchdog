@@ -86,6 +86,7 @@ async def dep_daemon(tmp_path, regs):  # noqa: F811
     """))
     d = Daemon(p, store=Store(tmp_path / "d.db"), watcher_registry=regs[0], channel_registry=regs[1],
                serve_heartbeat=False)
+    d.first_run_delay = 3600  # tests drive checks manually
     await d.start()
     yield d
     await d.stop()
