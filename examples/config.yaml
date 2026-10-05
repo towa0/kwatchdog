@@ -3,18 +3,18 @@
 # real environment. Never write tokens directly in this file.
 
 settings:
-  heartbeat_host: 0.0.0.0     # listen on the LAN so other machines can ping
-  heartbeat_port: 8787        # GET http://host:8787/ping/<name>
+  heartbeat_host: 0.0.0.0 # listen on the LAN so other machines can ping
+  heartbeat_port: 8787 # GET http://host:8787/ping/<name>
   retention_days: 30
   default_interval: 60s
   default_timeout: 10s
 
-digest:                       # daily summary through the channels below
+digest: # daily summary through the channels below
   at: "07:30"
   channels: [telegram]
 
-status_page:                  # read-only page + JSON API
-  host: tailscale             # 127.0.0.1 (default) | lan | tailscale | an IP
+status_page: # read-only page + JSON API
+  host: tailscale # 127.0.0.1 (default) | lan | tailscale | an IP
   port: 8788
   token: ${STATUS_TOKEN}
 
@@ -26,8 +26,8 @@ channels:
   phone:
     type: ntfy
     topic: ${NTFY_TOPIC}
-    ignore_quiet: true          # still delivered during quiet hours
-    min_severity: ALERT         # WARN never reaches the phone
+    ignore_quiet: true # still delivered during quiet hours
+    min_severity: ALERT # WARN never reaches the phone
   telegram:
     type: telegram
     token: ${TELEGRAM_TOKEN}
@@ -45,23 +45,23 @@ channels:
     to: [me@example.com]
 
 alerts:
-  default:                      # base for every watcher
-    severity: WARN              # minimum status that notifies
-    min_failures: 2             # consecutive failures before an incident opens
-    cooldown: 10m               # min time between notifications per watcher
-    flap_window: 10             # flapping = many OK<->fail changes in last N checks
+  default: # base for every watcher
+    severity: WARN # minimum status that notifies
+    min_failures: 2 # consecutive failures before an incident opens
+    cooldown: 10m # min time between notifications per watcher
+    flap_window: 10 # flapping = many OK<->fail changes in last N checks
     flap_threshold: 0.5
-    quiet_hours: "23:00-07:00"  # only ignore_quiet channels; held alerts sent at 07:00
-    escalate_after: 30m         # still failing after 30m => escalation
+    quiet_hours: "23:00-07:00" # only ignore_quiet channels; held alerts sent at 07:00
+    escalate_after: 30m # still failing after 30m => escalation
     channels: [bell, desktop, telegram]
     escalate_channels: [phone, mail]
-  critical:                     # named rule: inherits from default
+  critical: # named rule: inherits from default
     severity: ALERT
     min_failures: 1
     cooldown: 2m
     escalate_after: 10m
 
-remediations:                  # allowlist for on_alert; argv only, never a shell
+remediations: # allowlist for on_alert; argv only, never a shell
   restart-scraper:
     command: ["systemctl", "--user", "restart", "scraper"]
     timeout: 60s
@@ -69,8 +69,8 @@ remediations:                  # allowlist for on_alert; argv only, never a shel
 projects:
   website:
     description: public site + API
-    slo: 99.9                   # monthly uptime budget; alerts when the burn rate says it'll be missed
-    alerts: critical            # project-wide rule (name or inline overrides)
+    slo: 99.9 # monthly uptime budget; alerts when the burn rate says it'll be missed
+    alerts: critical # project-wide rule (name or inline overrides)
     watchers:
       - name: home
         type: http
@@ -104,13 +104,14 @@ projects:
       - name: alive
         type: process
         cmdline: scraper.py
-        on_alert: {command: restart-scraper, max_runs_per_hour: 3, cooldown: 10m}
+        on_alert:
+          { command: restart-scraper, max_runs_per_hour: 3, cooldown: 10m }
       - name: log
         type: logtail
         path: ~/scraper/scraper.log
         patterns: ['\bERROR\b', 'Traceback \(most recent call last\)']
-        warn_patterns: ['\b429\b', 'rate limit']
-        ignore: ['healthcheck']
+        warn_patterns: ['\b429\b', "rate limit"]
+        ignore: ["healthcheck"]
         hold: 10m
       - name: output
         type: file
@@ -138,13 +139,13 @@ projects:
         warn_z: 3
         alert_z: 5
       - name: nightly-ping
-        type: heartbeat         # cron job ends with: curl -fsS http://pi:8787/ping/scraper-nightly
+        type: heartbeat # cron job ends with: curl -fsS http://pi:8787/ping/scraper-nightly
         ping: scraper-nightly
         max_silence: 25h
       - name: repo
         type: git
         path: ~/scraper
-        check_ci: true          # uses GITHUB_TOKEN from env if set
+        check_ci: true # uses GITHUB_TOKEN from env if set
         interval: 15m
 
   trading:
@@ -180,17 +181,17 @@ projects:
     watchers:
       - name: health
         type: system
-        cpu: {warn_above: 85, alert_above: 97}
-        temp: {warn_above: 70, alert_above: 80}
+        cpu: { warn_above: 85, alert_above: 97 }
+        temp: { warn_above: 70, alert_above: 80 }
       - name: sd-card
         type: disk
         path: /
         warn_percent: 80
         alert_percent: 92
       - name: nginx
-        type: systemd             # Linux only; shown as SLEEPING elsewhere
+        type: systemd # Linux only; shown as SLEEPING elsewhere
         unit: nginx.service
       - name: backups
         type: shell
-        command: /usr/local/bin/check_backup   # Nagios plugin convention
+        command: /usr/local/bin/check_backup # Nagios plugin convention
         nagios: true
