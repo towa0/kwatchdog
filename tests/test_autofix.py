@@ -250,8 +250,13 @@ async def test_kill_switch_wins_over_cooldown(make_daemon):
     d = await make_daemon("{command: restart, cooldown: 10m}")
     try:
         await alert_and_settle(d)  # runs once, cooldown now active
-        SCRIPT["a"] = ["OK"]
-        await d.check_once("p/a")  # incident closes
+        # the successful fix triggers an immediate re-check (default result: OK) -> incident closes
+        for _ in range(100):
+            if not d.alert_states["p/a"].incident_open and not d._inflight:
+                break
+            await asyncio.sleep(0.05)
+        assert not d.alert_states["p/a"].incident_open
+        SCRIPT["a"] = []
         set_mode(d.store, "off")
         await alert_and_settle(d)  # new incident inside the cooldown: still logged as 'off'
         assert [r["mode"] for r in d.store.runs("p/a")] == ["off", "run"]
