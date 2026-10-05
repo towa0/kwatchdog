@@ -224,12 +224,13 @@ class Store:
 
     def stats(self, key: str, since: float) -> dict[str, Any]:
         rows = self._x("SELECT status, latency_ms FROM results WHERE wkey=? AND ts>=?", (key, since)).fetchall()
-        counted = [r for r in rows if r[0] != Status.SLEEPING.value]
-        ok = sum(1 for r in counted if r[0] == Status.OK.value)
+        # uptime = share of checks not in ALERT; SLEEPING/BLOCKED aren't the watcher's own verdict
+        counted = [r for r in rows if r[0] not in (Status.SLEEPING.value, Status.BLOCKED.value)]
+        alerts = sum(1 for r in counted if r[0] == Status.ALERT.value)
         lats = sorted(r[1] for r in rows if r[1] is not None)
         return {
             "checks": len(counted),
-            "uptime": (100.0 * ok / len(counted)) if counted else None,
+            "uptime": (100.0 * (len(counted) - alerts) / len(counted)) if counted else None,
             "p50": _pct(lats, 50),
             "p95": _pct(lats, 95),
             "warn": sum(1 for r in counted if r[0] == Status.WARN.value),

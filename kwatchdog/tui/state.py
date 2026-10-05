@@ -18,8 +18,10 @@ STATUS_STYLE = {
     Status.WARN: "bold #ff1a1a",
     Status.OK: "#8b0000",
     Status.SLEEPING: "#5f5f5f",
+    Status.BLOCKED: "bold #8b0000 on #2e2e2e",  # grey-red: failing because of a dependency
 }
-STATUS_GLYPH = {Status.ALERT: "!!", Status.WARN: "! ", Status.OK: "--", Status.SLEEPING: "zz"}
+STATUS_GLYPH = {Status.ALERT: "!!", Status.WARN: "! ", Status.OK: "--", Status.SLEEPING: "zz",
+                Status.BLOCKED: "<-"}
 BLOCKS = "▁▂▃▄▅▆▇█"
 
 

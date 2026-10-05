@@ -110,7 +110,7 @@ class Watcher(_Pluggable):
     """Subclass this. Set ``type``, a ``Config`` model, implement ``check``."""
 
     RESERVED = frozenset({"name", "type", "interval", "timeout", "retries", "retry_delay", "enabled",
-                          "alerts", "description", "tags"})
+                          "alerts", "description", "tags", "depends_on", "on_alert", "slo"})
 
     default_interval: ClassVar[float] = 60.0
 

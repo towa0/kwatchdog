@@ -85,6 +85,7 @@ HELP = """\
 [b]STATUS[/b]
   [bold #000000 on #ff1a1a] ALERT [/]  failing hard      [bold #ff1a1a] WARN [/]  degraded
   [#8b0000] OK [/]     healthy            [#5f5f5f] SLEEPING [/] disabled / muted / not yet checked
+  [bold #8b0000 on #2e2e2e] BLOCKED [/] failing because a dependency is in ALERT (the dependency alerts, not this)
 
 The border pulses while anything is in ALERT. Config errors show in the
 banner under the top bar; the daemon keeps running the last good config.
@@ -379,7 +380,8 @@ class DetailScreen(Screen):
         width = max(10, self.size.width - 6)
         for r in reversed(recent[:width]):
             strip.append("█" if r.status == Status.ALERT else ("▆" if r.status == Status.WARN else "▁"),
-                         style=STATUS_STYLE[r.status].replace("bold #000000 on ", "").replace("bold ", ""))
+                         style=STATUS_STYLE[r.status].split(" on ")[0].replace("bold #000000", "#ff1a1a")
+                         .replace("bold ", ""))
         self.query_one("#detail-strip", Static).update(strip)
 
         self.results = recent[:50]

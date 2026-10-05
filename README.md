@@ -149,7 +149,8 @@ projects:
 ```
 
 Every watcher accepts the common keys `name`, `type`, `interval`, `timeout`,
-`retries`, `retry_delay`, `enabled`, `alerts`, `description` and `tags`.
+`retries`, `retry_delay`, `enabled`, `alerts`, `description`, `tags`,
+`depends_on`, `on_alert` and `slo` (the last three are covered below).
 Everything else goes to the watcher's own schema, and unknown keys are errors,
 so typos get caught.
 
@@ -205,6 +206,41 @@ returns the overall status as JSON.
 | **WARN** | degraded (slow, stale, near a threshold) |
 | **OK** | healthy |
 | **SLEEPING** | disabled, missing dependency, wrong platform, config error, or not yet checked |
+| **BLOCKED** | failing, but something it depends on is in ALERT. The dependency alerts, this one stays quiet |
+
+### Dependencies
+
+```yaml
+projects:
+  net:
+    watchers:
+      - {name: router, type: ping, host: 192.168.1.1}
+  web:
+    depends_on: [net/router]          # project-wide: every watcher below
+    watchers:
+      - {name: db, type: port, host: localhost, port: 5432}
+      - {name: api, type: http, url: "http://localhost:8000/health", depends_on: [db]}
+```
+
+A `depends_on` entry is `project/watcher`, `watcher` (same project) or
+`project` (every watcher in it). Unknown names and cycles are config errors
+for the watcher that declares them.
+
+When a watcher fails and one of its dependencies (directly or through a chain)
+is in **ALERT**, the result is recorded as **BLOCKED**: `blocked by
+net/router (no reply) · own check: connection refused`. BLOCKED never
+notifies, resets the failure count and pauses escalation. The root cause sends
+**one** alert, and that alert lists what it takes down: `… · root cause for 3
+dependent(s): web/db, web/api, …`.
+
+Two details:
+
+* Before a failing dependent records its result, any dependency whose last
+  verdict is older than 10 s is checked right away. So the order in which
+  checks happen to run doesn't decide which watcher alerts.
+* Only failing dependents become BLOCKED. A dependent that still passes stays
+  OK, and a dependency in WARN doesn't block anything. BLOCKED checks don't
+  count against uptime.
 
 ### Alert rules in detail
 

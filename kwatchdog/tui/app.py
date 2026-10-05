@@ -253,7 +253,7 @@ class WatchdogApp(App):
         else:
             t.append("  daemon SLEEPING - run `watchdog daemon` ", style=f"bold {RED}")
         t.append("  ")
-        for s in (Status.ALERT, Status.WARN, Status.OK, Status.SLEEPING):
+        for s in (Status.ALERT, Status.WARN, Status.BLOCKED, Status.OK, Status.SLEEPING):
             t.append(f" {c[s]} {s.value} ", style=STATUS_STYLE[s] if c[s] else GRAY)
             t.append(" ")
         if snap.errors:

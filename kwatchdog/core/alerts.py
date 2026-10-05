@@ -15,6 +15,8 @@ Pure logic (time is injected) so every rule is unit-testable:
                       ``ignore_quiet`` get them); held alerts go out when quiet ends
 * ``escalate_after``- incident open this long => one escalation notice
 * recovery          - incident closes on the first OK; recovery notice if alerted
+* BLOCKED           - a dependency is in ALERT: no notifications, failure count
+                      resets; escalation timers pause until the result is real again
 """
 from __future__ import annotations
 
@@ -41,6 +43,7 @@ class AlertState:
     held: bool = False  # alert went out during quiet hours only; resend after
     escalated: bool = False
     last_notified: float | None = None
+    blocked: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -104,6 +107,11 @@ class AlertEngine:
         now = r.ts if now is None else now
         if r.status == Status.SLEEPING:
             return []
+        if r.status == Status.BLOCKED:
+            st.blocked = True
+            st.consecutive_failures = 0
+            return []
+        st.blocked = False
         acts: list[Action] = []
 
         # flap detection: OK <-> failing changes over the full window (WARN<->ALERT isn't a flap)
@@ -173,7 +181,7 @@ class AlertEngine:
         """Time-based transitions (escalation, held quiet-hour alerts). The daemon
         calls this periodically so escalation doesn't depend on check interval."""
         acts: list[Action] = []
-        if not st.incident_open or muted:
+        if not st.incident_open or muted or st.blocked:
             return acts
         status = Status(st.status or "ALERT")
         quiet = self._quiet(rule, now)

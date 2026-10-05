@@ -81,6 +81,8 @@ class Daemon:
         self._bg: list[asyncio.Task] = []
         self.started = time.time()
         self.on_notification = None  # optional callback(Notification) (embedded TUI)
+        self._refreshing: set[str] = set()
+        self.dep_refresh_age = 10.0  # re-check a dependency first if its result is older than this
 
     # ------------------------------------------------------------------ setup
     def _registries(self) -> tuple[Registry[Watcher], Registry[Channel]]:
@@ -239,7 +241,58 @@ class Daemon:
         if w is None or spec is None:
             return None
         result = await self.run_check(w, spec)
+        if result.status.failing and spec.depends_on:
+            await self._refresh_dependencies(spec)
+            result = self.apply_dependencies(spec, result)
         await self.handle_result(spec, result)
+        return result
+
+    # ------------------------------------------------------------ dependencies
+    async def _refresh_dependencies(self, spec: WatcherSpec) -> None:
+        """A dependent just failed: make sure its dependencies' verdicts are fresh, so the
+        root cause is found (and alerts) before the dependents do."""
+        assert self.store is not None
+        now = time.time()
+        stale = []
+        for dep in spec.depends_on:
+            row = self.store.watcher_row(dep)
+            fresh = row is not None and row.last_check is not None and now - row.last_check < self.dep_refresh_age
+            if dep in self.watchers and not fresh and dep not in self._refreshing:
+                stale.append(dep)
+        self._refreshing.update(stale)
+        try:
+            await asyncio.gather(*(self.check_once(d) for d in stale), return_exceptions=True)
+        finally:
+            self._refreshing.difference_update(stale)
+
+    def root_cause(self, spec: WatcherSpec, _seen: set[str] | None = None) -> tuple[str, str] | None:
+        """First dependency (transitively) that is itself in ALERT: (key, message)."""
+        assert self.store is not None
+        seen = _seen if _seen is not None else {spec.key}
+        for dep in spec.depends_on:
+            if dep in seen:
+                continue
+            seen.add(dep)
+            row = self.store.watcher_row(dep)
+            if row is None or row.disabled:
+                continue
+            if row.status == Status.ALERT:
+                return dep, row.message
+            if row.status == Status.BLOCKED and dep in self.specs:
+                found = self.root_cause(self.specs[dep], seen)
+                if found:
+                    return found
+        return None
+
+    def apply_dependencies(self, spec: WatcherSpec, result: Result) -> Result:
+        if not result.status.failing:
+            return result
+        root = self.root_cause(spec)
+        if root is None:
+            return result
+        key, msg = root
+        result.status = Status.BLOCKED
+        result.message = f"blocked by {key} ({msg[:80]}) · own check: {result.message}"
         return result
 
     async def handle_result(self, spec: WatcherSpec, result: Result) -> None:
@@ -288,8 +341,14 @@ class Daemon:
 
     async def dispatch(self, spec: WatcherSpec, a: Action) -> list[str]:
         assert self.store is not None
+        message = a.message
+        if a.kind in ("alert", "update", "escalation") and a.status == Status.ALERT:
+            impacted = self.config.dependents(spec.key)
+            if impacted:
+                names = ", ".join(impacted[:5]) + (f" +{len(impacted) - 5} more" if len(impacted) > 5 else "")
+                message += f" · root cause for {len(impacted)} dependent(s): {names}"
         n = Notification(kind=a.kind, project=spec.project, watcher=spec.name, status=a.status.value,
-                         message=secrets.redact(a.message), ts=time.time(), duration_s=a.duration_s)
+                         message=secrets.redact(message), ts=time.time(), duration_s=a.duration_s)
         targets = self._targets(a)
         results = await asyncio.gather(*(self._send(ch, n) for ch in targets), return_exceptions=True)
         delivered = []

@@ -116,6 +116,8 @@ class WatcherSpec:
     config: PluginConfig | None = None  # validated, env-expanded plugin config
     error: str | None = None  # config error -> watcher can't run
     unavailable: str | None = None  # missing dep / wrong platform -> disabled
+    depends_on_raw: list[str] = field(default_factory=list)  # as written (watcher, project/watcher, project)
+    depends_on: list[str] = field(default_factory=list)  # resolved watcher keys
 
     @property
     def key(self) -> str:
@@ -139,6 +141,7 @@ class ProjectSpec:
     description: str = ""
     enabled: bool = True
     watchers: list[WatcherSpec] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)  # applies to every watcher in the project
 
 
 @dataclass
@@ -167,6 +170,18 @@ class AppConfig:
 
     def watcher(self, key: str) -> WatcherSpec | None:
         return next((w for w in self.watchers() if w.key == key), None)
+
+    def dependents(self, key: str) -> list[str]:
+        """Watchers that depend on ``key``, directly or transitively (BFS order)."""
+        out: list[str] = []
+        frontier = [key]
+        while frontier:
+            cur = frontier.pop(0)
+            for w in self.watchers():
+                if cur in w.depends_on and w.key not in out and w.key != key:
+                    out.append(w.key)
+                    frontier.append(w.key)
+        return out
 
 
 def _fmt_validation(e: ValidationError) -> str:
@@ -247,6 +262,13 @@ def load_config(
             continue
         proj = ProjectSpec(name=str(pname), description=str(pbody.get("description") or ""),
                            enabled=bool(pbody.get("enabled", True)))
+        pdeps = pbody.get("depends_on") or []
+        if isinstance(pdeps, str):
+            pdeps = [pdeps]
+        if not isinstance(pdeps, list) or not all(isinstance(d, str) for d in pdeps):
+            cfg.errors.append(f"projects.{pname}.depends_on: must be a list of names")
+            pdeps = []
+        proj.depends_on = pdeps
         try:
             proj_rule = _resolve_rule(pbody.get("alerts"), cfg.rules["default"], cfg)
         except ValueError as e:
@@ -269,7 +291,59 @@ def load_config(
         for ch in w.rule.channels + w.rule.escalate_channels:
             if ch not in cfg.channels:
                 cfg.errors.append(f"{w.key}: alert rule references unknown channel '{ch}'")
+    _resolve_dependencies(cfg)
     return cfg
+
+
+def _resolve_dependencies(cfg: AppConfig) -> None:
+    """``depends_on`` entries: 'project/watcher', 'watcher' (same project) or 'project'
+    (= every watcher in it). Unknown names and cycles are config errors."""
+    keys = {w.key for w in cfg.watchers()}
+    for proj in cfg.projects.values():
+        for w in proj.watchers:
+            resolved: list[str] = []
+            for ref in proj.depends_on + w.depends_on_raw:
+                if "/" in ref:
+                    targets = [ref] if ref in keys else []
+                elif f"{proj.name}/{ref}" in keys:
+                    targets = [f"{proj.name}/{ref}"]
+                elif ref in cfg.projects:
+                    targets = [x.key for x in cfg.projects[ref].watchers]
+                else:
+                    targets = []
+                if not targets:
+                    msg = f"depends_on: unknown watcher or project '{ref}'"
+                    cfg.errors.append(f"{w.key}: {msg}")
+                    w.error = w.error or msg
+                    continue
+                resolved += [t for t in targets if t != w.key and t not in resolved]
+            w.depends_on = resolved
+    # cycle detection (DFS, colors)
+    graph = {w.key: w.depends_on for w in cfg.watchers()}
+    state: dict[str, int] = {}
+    in_cycle: set[str] = set()
+
+    def visit(k: str, stack: list[str]) -> None:
+        state[k] = 1
+        stack.append(k)
+        for d in graph.get(k, []):
+            if state.get(d) == 1:
+                in_cycle.update(stack[stack.index(d):])
+            elif d not in state:
+                visit(d, stack)
+        stack.pop()
+        state[k] = 2
+
+    for k in graph:
+        if k not in state:
+            visit(k, [])
+    for k in sorted(in_cycle):
+        w = cfg.watcher(k)
+        if w is not None:
+            msg = "depends_on: dependency cycle"
+            cfg.errors.append(f"{k}: {msg}")
+            w.error = w.error or msg
+            w.depends_on = []
 
 
 def _resolve_rule(value: Any, base: AlertRule, cfg: AppConfig) -> AlertRule:
@@ -315,6 +389,7 @@ def _load_watcher(proj: ProjectSpec, idx: int, body: Any, proj_rule: AlertRule,
     spec.timeout = common.timeout or st.default_timeout
     spec.retries, spec.retry_delay = common.retries, common.retry_delay
     spec.enabled, spec.description, spec.tags = common.enabled, common.description, common.tags
+    spec.depends_on_raw = [common.depends_on] if isinstance(common.depends_on, str) else list(common.depends_on)
     try:
         spec.rule = _resolve_rule(common.alerts, proj_rule, cfg)
     except ValueError as e:
@@ -353,6 +428,9 @@ class _Common(BaseModel):
     alerts: str | dict | None = None
     description: str = ""
     tags: list[str] = Field(default_factory=list)
+    depends_on: str | list[str] = Field(default_factory=list)
+    on_alert: dict | None = None
+    slo: float | None = Field(None, gt=0, lt=100)
 
 
 def _load_channel(name: str, body: Any, reg: Registry[Channel], cfg: AppConfig) -> ChannelSpec:

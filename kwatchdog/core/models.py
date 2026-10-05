@@ -17,10 +17,11 @@ class Status(str, enum.Enum):
     WARN = "WARN"
     ALERT = "ALERT"
     SLEEPING = "SLEEPING"  # disabled, muted, unavailable or not yet checked
+    BLOCKED = "BLOCKED"  # failing, but a dependency is in ALERT: the root cause alerts instead
 
     @property
     def rank(self) -> int:
-        return {"SLEEPING": 0, "OK": 1, "WARN": 2, "ALERT": 3}[self.value]
+        return {"SLEEPING": 0, "OK": 1, "BLOCKED": 2, "WARN": 3, "ALERT": 4}[self.value]
 
     @property
     def failing(self) -> bool:
