@@ -115,3 +115,31 @@ async def test_splash_dismisses(setup):
         assert type(app.screen).__name__ == "SplashScreen"
         await pilot.pause(1.6)
         assert app.screen is app.main
+
+
+async def test_hide_key_bar_and_no_palette_emoji(setup):
+    from textual.command import SearchIcon
+    from textual.widgets import Footer
+
+    cfg, store = setup
+    app = WatchdogApp(cfg, splash=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.2)
+        footer = app.main.query_one(Footer)
+        assert footer.display and footer.region.height == 1
+        await pilot.press("h")
+        await pilot.pause(0.1)
+        assert footer.region.height == 0 and store.kv_get(WatchdogApp.FOOTER_KEY) is True
+        await pilot.press("ctrl+p")
+        await pilot.pause(0.3)
+        icon = app.screen.query_one(SearchIcon)
+        assert icon.region.width == 0  # 🔎 hidden
+        await pilot.press("escape")
+    app2 = WatchdogApp(cfg, splash=False)  # remembered across restarts
+    async with app2.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.2)
+        assert app2.main.query_one(Footer).region.height == 0
+        await pilot.press("h")
+        await pilot.pause(0.1)
+        assert app2.main.query_one(Footer).region.height == 1
+        assert store.kv_get(WatchdogApp.FOOTER_KEY) is False

@@ -83,6 +83,10 @@ Tree > .tree--guides { color: #8b0000; }
 Tree > .tree--guides-selected { color: #ff1a1a; }
 
 Footer { background: #000000; }
+App.-hide-footer Footer { display: none; }
+
+/* command palette: no emoji icon in front of the search input */
+SearchIcon { display: none; }
 
 /* ------------------------------------------------------------ splash/about */
 SplashScreen, AboutScreen {

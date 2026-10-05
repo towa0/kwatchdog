@@ -81,6 +81,7 @@ HELP = """\
 
 [b]GENERAL[/b]
   ctrl+p  command palette     i  about     ?  this help     q  quit
+  h       hide / show the key bar at the bottom
 
 [b]STATUS[/b]
   [bold #000000 on #ff1a1a] ALERT [/]  failing hard      [bold #ff1a1a] WARN [/]  degraded

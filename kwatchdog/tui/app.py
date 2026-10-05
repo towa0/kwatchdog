@@ -159,6 +159,8 @@ class WatchdogApp(App):
     CSS_PATH = "theme.tcss"
     TITLE = "kwatchdog"
     ENABLE_COMMAND_PALETTE = True
+    BINDINGS = [Binding("h", "toggle_footer", "hide keys")]
+    FOOTER_KEY = "tui:footer_hidden"
 
     def __init__(self, config_path: Path, *, embedded: bool = False, splash: bool = True,
                  refresh_interval: float = 1.0):
@@ -183,6 +185,7 @@ class WatchdogApp(App):
     async def on_mount(self) -> None:
         self.register_theme(THEME)
         self.theme = "kwatchdog"
+        self.set_class(bool(self.store.kv_get(self.FOOTER_KEY, False)), "-hide-footer")
         await self.push_screen(MainScreen())
         if self.embedded:
             await self._start_daemon()
@@ -534,6 +537,14 @@ class WatchdogApp(App):
         self.store.push_command("test", self.target())
         self.notify("test notification queued", timeout=2)
 
+    def action_toggle_footer(self) -> None:
+        """Hide/show the key bar at the bottom (remembered across restarts)."""
+        hidden = not self.has_class("-hide-footer")
+        self.set_class(hidden, "-hide-footer")
+        self.store.kv_set(self.FOOTER_KEY, hidden)
+        if hidden:
+            self.notify("key bar hidden - press h to show it again", timeout=3)
+
     def action_help(self) -> None:
         self.push_screen(HelpScreen())
 
@@ -554,6 +565,8 @@ class WatchdogApp(App):
         yield SystemCommand("Autofix: on", "Re-enable auto-remediation", lambda: self.action_autofix_mode("on"))
         yield SystemCommand("Confirm pending fix", "Run the queued fix of the selected watcher",
                             self.action_confirm_fix)
+        yield SystemCommand("Hide / show key bar", "Toggle the controls at the bottom (h)",
+                            self.action_toggle_footer)
         yield SystemCommand("Help", "Key bindings", self.action_help)
         yield SystemCommand("About kwatchdog", "The dog", self.action_about)
         if self.snap:

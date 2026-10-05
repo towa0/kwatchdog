@@ -478,6 +478,7 @@ GITHUB_TOKEN=ghp_…
 | `ctrl+p` | command palette (run all, unmute all, test notification, jump to any watcher) |
 | `t` | test notification |
 | `f` | confirm the pending autofix of the selected watcher |
+| `h` | hide / show the key bar at the bottom (remembered across restarts) |
 | `?` / `i` / `q` | help / about (the dog) / quit |
 
 The TUI reads SQLite once per second. Actions go to the daemon through a
