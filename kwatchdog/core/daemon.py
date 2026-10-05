@@ -85,7 +85,7 @@ class Daemon:
         self._bg: list[asyncio.Task] = []
         self.started = time.time()
         self.on_notification = None  # optional callback(Notification) (embedded TUI)
-        self._refreshing: set[str] = set()
+        self._inflight: dict[str, asyncio.Future] = {}  # key -> running check
         self.remediator = Remediator(self)
         self.digester = Digester(self)
         self.status_server: StatusServer | None = None
@@ -251,6 +251,17 @@ class Daemon:
         return result
 
     async def check_once(self, key: str) -> Result | None:
+        """Run one check. If that watcher's check is already running (its own loop, or a
+        dependent asking for it), wait for that one instead of starting a second."""
+        running = self._inflight.get(key)
+        if running is not None and not running.done():
+            return await asyncio.shield(running)
+        task = asyncio.ensure_future(self._check_once(key))
+        self._inflight[key] = task
+        task.add_done_callback(lambda t: self._inflight.pop(key) if self._inflight.get(key) is t else None)
+        return await asyncio.shield(task)
+
+    async def _check_once(self, key: str) -> Result | None:
         w, spec = self.watchers.get(key), self.specs.get(key)
         if w is None or spec is None:
             return None
@@ -263,21 +274,19 @@ class Daemon:
 
     # ------------------------------------------------------------ dependencies
     async def _refresh_dependencies(self, spec: WatcherSpec) -> None:
-        """A dependent just failed: make sure its dependencies' verdicts are fresh, so the
-        root cause is found (and alerts) before the dependents do."""
+        """A dependent just failed: make sure its dependencies' verdicts are fresh (or wait for
+        the check already in flight), so the root cause alerts before the dependents do."""
         assert self.store is not None
         now = time.time()
-        stale = []
+        need = []
         for dep in spec.depends_on:
+            if dep not in self.watchers:
+                continue
             row = self.store.watcher_row(dep)
             fresh = row is not None and row.last_check is not None and now - row.last_check < self.dep_refresh_age
-            if dep in self.watchers and not fresh and dep not in self._refreshing:
-                stale.append(dep)
-        self._refreshing.update(stale)
-        try:
-            await asyncio.gather(*(self.check_once(d) for d in stale), return_exceptions=True)
-        finally:
-            self._refreshing.difference_update(stale)
+            if dep in self._inflight or not fresh:
+                need.append(dep)
+        await asyncio.gather(*(self.check_once(d) for d in need), return_exceptions=True)
 
     def root_cause(self, spec: WatcherSpec, _seen: set[str] | None = None) -> tuple[str, str] | None:
         """First dependency (transitively) that is itself in ALERT: (key, message)."""
@@ -611,7 +620,7 @@ class Daemon:
         log.info("daemon started: %d watchers", len(self.specs))
 
     async def stop(self) -> None:
-        for t in list(self.remediator._tasks):
+        for t in list(self.remediator._tasks) + list(self._inflight.values()):
             t.cancel()
         for k in list(self.tasks):
             self._stop_watcher(k)

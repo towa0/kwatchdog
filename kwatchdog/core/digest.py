@@ -7,7 +7,8 @@ watchers, things that are silently stale, budgets and autofix activity.
 
 Budgets: a watcher (or its project) with ``slo: 99.9`` gets a monthly
 downtime budget of (1 - 99.9%) of the month. Downtime so far is estimated from
-month-to-date uptime. The rest of the month is projected at the burn rate of
+month-to-date uptime over the time actually observed (at least an hour of
+data is needed before any verdict). The rest of the month is projected at the burn rate of
 the last ``settings.slo_lookback`` (default 24h). If the projection exceeds
 the budget, an ALERT goes out, at most once per day per watcher and again if
 it gets worse (will-miss -> exhausted).
@@ -84,16 +85,19 @@ def month_bounds(now: float, localtime: LocalTime | None = None) -> tuple[float,
 
 
 def evaluate_budget(store: "Store", key: str, slo: float, now: float, lookback: float = 86400,
-                    localtime: LocalTime | None = None, min_checks: int = 5) -> Budget:
+                    localtime: LocalTime | None = None, min_checks: int = 5, min_observed: float = 3600) -> Budget:
     start, end = month_bounds(now, localtime)
-    total, elapsed, remaining = end - start, max(0.0, now - start), max(0.0, end - now)
+    total, remaining = end - start, max(0.0, end - now)
     allowed = 1.0 - slo / 100.0
     budget_s = allowed * total
     mtd = store.stats(key, start)
     recent = store.stats(key, now - lookback)
-    if mtd["checks"] < min_checks or mtd["uptime"] is None:
+    first = store.first_result_ts(key, start)
+    # only time we actually watched counts; before that, assume nothing (not "same as now")
+    observed = max(0.0, now - first) if first is not None else 0.0
+    if mtd["checks"] < min_checks or mtd["uptime"] is None or observed < min_observed:
         return Budget(key, slo, "no-data", None, None, budget_s, 0.0, None)
-    used_s = (1.0 - mtd["uptime"] / 100.0) * elapsed
+    used_s = (1.0 - mtd["uptime"] / 100.0) * observed
     recent_bad = (1.0 - recent["uptime"] / 100.0) if recent["checks"] and recent["uptime"] is not None \
         else (1.0 - mtd["uptime"] / 100.0)
     projected_down = used_s + recent_bad * remaining
@@ -197,9 +201,12 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
     runs = [r for r in store.runs(limit=500) if r["ts"] >= since]
     mode = get_mode(store) if cfg.settings.autofix else "off (config)"
     if runs or mode != "on":
+        attempts = [r for r in runs if r["mode"] in ("run", "dry-run", "pending")]
         failed = sum(1 for r in runs if r["mode"] == "run" and r["exit_code"] not in (0, None))
         pending = sum(1 for r in runs if r["mode"] == "pending")
-        lines.append(f"\nAUTOFIX ({mode}): {len(runs)} attempt(s), {failed} failed, {pending} awaiting confirm")
+        skipped = sum(1 for r in runs if r["mode"] in ("off", "rate-limited"))
+        lines.append(f"\nAUTOFIX ({mode}): {len(attempts)} attempt(s), {failed} failed, {pending} awaiting confirm"
+                     + (f", {skipped} skipped (off / rate limit)" if skipped else ""))
 
     errors = store.kv_get("config_errors", []) or []
     if errors:

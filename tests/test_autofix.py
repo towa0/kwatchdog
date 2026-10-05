@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 import textwrap
@@ -7,6 +8,7 @@ import pytest
 from kwatchdog.cli import main as cli_main
 from kwatchdog.core.config import load_config
 from kwatchdog.core.daemon import Daemon
+from kwatchdog.core.models import Status
 from kwatchdog.core.remediation import get_mode, set_mode
 from kwatchdog.core.storage import Store
 
@@ -83,7 +85,11 @@ async def test_successful_fix_logged_and_rechecks(make_daemon):
         runs = d.store.runs("p/a")
         assert len(runs) == 1 and runs[0]["mode"] == "run" and runs[0]["exit_code"] == 0
         assert "fixed" in runs[0]["output"] and runs[0]["duration_ms"] > 0
-        assert d.run_now["p/a"].is_set()  # immediate re-check
+        for _ in range(100):  # immediate re-check: the watcher loop wakes and records OK
+            if d.store.watcher_row("p/a").status == Status.OK:
+                break
+            await asyncio.sleep(0.05)
+        assert d.store.watcher_row("p/a").status == Status.OK
         assert not [n for n in SENT if n.kind == "autofix"]
     finally:
         await d.stop()
@@ -238,3 +244,16 @@ def test_cli_kill_switch(tmp_path, monkeypatch, capsys):
     assert cli_main(["autofix", "status"]) == 0
     assert "autofix: off" in capsys.readouterr().out
     assert cli_main(["autofix", "confirm", "99"]) == 1
+
+
+async def test_kill_switch_wins_over_cooldown(make_daemon):
+    d = await make_daemon("{command: restart, cooldown: 10m}")
+    try:
+        await alert_and_settle(d)  # runs once, cooldown now active
+        SCRIPT["a"] = ["OK"]
+        await d.check_once("p/a")  # incident closes
+        set_mode(d.store, "off")
+        await alert_and_settle(d)  # new incident inside the cooldown: still logged as 'off'
+        assert [r["mode"] for r in d.store.runs("p/a")] == ["off", "run"]
+    finally:
+        await d.stop()

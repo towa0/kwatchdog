@@ -59,6 +59,16 @@ def test_budget_on_track_will_miss_exhausted(tmp_path):
     assert evaluate_budget(store, "a/none", 99.9, NOW).state == "no-data"
 
 
+def test_new_watcher_needs_an_hour_and_counts_only_observed_time(tmp_path):
+    store = Store(tmp_path / "b.db")
+    fill(store, "a/new", NOW - 300, NOW, 30, lambda t: Status.ALERT if int(t / 30) % 2 else Status.OK)
+    assert evaluate_budget(store, "a/new", 99.9, NOW).state == "no-data"  # 5 minutes of data
+    # watched for 2h, 1 of 120 checks failed: ~1 minute down, not "0.8% of half a month"
+    fill(store, "a/two", NOW - 7200, NOW, 60, lambda t: Status.ALERT if t == NOW - 7200 else Status.OK)
+    b = evaluate_budget(store, "a/two", 99.9, NOW)
+    assert b.state != "exhausted" and b.used_s < 120
+
+
 def test_blocked_and_sleeping_do_not_burn_budget(tmp_path):
     store = Store(tmp_path / "b.db")
     start, _ = month_bounds(NOW)

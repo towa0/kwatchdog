@@ -30,6 +30,9 @@ class Fake(Watcher):
             raise RuntimeError("kaboom")
         if item == "HANG":
             await asyncio.sleep(60)
+        if item.startswith("SLOW_"):
+            await asyncio.sleep(0.3)
+            item = item[5:]
         return Result(Status(item), f"{self.name} says {item} {self.config.note}", latency_ms=5.0)
 
 

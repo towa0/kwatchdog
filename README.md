@@ -240,8 +240,9 @@ dependent(s): web/db, web/api, …`.
 Two details:
 
 * Before a failing dependent records its result, any dependency whose last
-  verdict is older than 10 s is checked right away. So the order in which
-  checks happen to run doesn't decide which watcher alerts.
+  verdict is older than 10 s is checked right away. If that dependency's
+  check is already running, the dependent waits for it. So the order in which
+  checks happen to run (at startup, say) doesn't decide which watcher alerts.
 * Only failing dependents become BLOCKED. A dependent that still passes stays
   OK, and a dependency in WARN doesn't block anything. BLOCKED checks don't
   count against uptime.
@@ -363,7 +364,7 @@ SILENTLY STALE (3)
   pi/nginx: not running - 'systemd' only works on linux (this is win32)
 
 UPTIME BUDGETS (month)
-  !! web/api: SLO 99.9% WILL MISS: projected 99.712% this month, 41% of 12h00m budget used, burn rate 5.2x
+  !! web/api: SLO 99.9% WILL MISS: projected 99.712% this month, 41% of 43m budget used, burn rate 5.2x
 
 AUTOFIX (on): 2 attempt(s), 0 failed, 0 awaiting confirm
 ```
@@ -378,8 +379,9 @@ deliver it.
 **Uptime budgets.** `slo: 99.9` allows 0.1 % of the month as downtime, which is
 43 minutes in a 30-day month. Downtime so far is estimated from month-to-date
 uptime (share of non-ALERT checks; BLOCKED and SLEEPING don't count). The rest
-of the month is projected at the burn rate of the last `slo_lookback`. The
-budget is checked hourly:
+of the month is projected at the burn rate of the last `slo_lookback`. Only
+time the watcher was actually observed counts, and nothing is judged before
+an hour of data. The budget is checked hourly:
 
 * If the projection misses the target, one **ALERT** goes out (`BUDGET`
   notification, through the watcher's alert channels). It repeats at most once

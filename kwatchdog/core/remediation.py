@@ -75,6 +75,15 @@ class Remediator:
         rem = self.d.config.remediations.get(oa.command)
         if rem is None:
             return
+        mode = self.effective_mode()
+        argv = " ".join(rem.command)
+        if mode == "off":  # kill switch first: nothing below may run
+            # one 'off' row per incident, so you can see what would have happened
+            off = self.store.last_run(key, ("off",))
+            if not off or (st.opened and off["ts"] < st.opened):
+                self.store.add_run(key, oa.command, argv, "off")
+                self.store.add_event(key, "autofix", "SLEEPING", f"autofix is OFF: did not run '{oa.command}'")
+            return
         last = self.store.last_run(key, ATTEMPT_MODES)
         if last and now - last["ts"] < oa.cooldown:
             return
@@ -83,15 +92,6 @@ class Remediator:
             if now - pending["ts"] < 3600:
                 return  # already waiting for a human
             self.store.set_run_mode(pending["id"], "expired")
-        mode = self.effective_mode()
-        argv = " ".join(rem.command)
-        if mode == "off":
-            # one 'off' row per incident, so you can see what would have happened
-            off = self.store.last_run(key, ("off",))
-            if not off or (st.opened and off["ts"] < st.opened):
-                self.store.add_run(key, oa.command, argv, "off")
-                self.store.add_event(key, "autofix", "SLEEPING", f"autofix is OFF: did not run '{oa.command}'")
-            return
         if self.store.count_runs(key, now - 3600, ATTEMPT_MODES) >= oa.max_runs_per_hour:
             recent_limit = self.store.last_run(key, ("rate-limited",))
             if not recent_limit or now - recent_limit["ts"] >= 3600:
@@ -108,7 +108,6 @@ class Remediator:
         if oa.require_confirm:
             rid = self.store.add_run(key, oa.command, argv, "pending")
             msg = f"autofix '{oa.command}' needs confirmation: watchdog autofix confirm {rid}"
-            self.store.add_event(key, "autofix", "WARN", msg)
             await self.d.dispatch(spec, Action("autofix", Status.WARN, msg, notify=True))
             return
         rid = self.store.add_run(key, oa.command, argv, "run")

@@ -85,7 +85,7 @@ HELP = """\
 [b]STATUS[/b]
   [bold #000000 on #ff1a1a] ALERT [/]  failing hard      [bold #ff1a1a] WARN [/]  degraded
   [#8b0000] OK [/]     healthy            [#5f5f5f] SLEEPING [/] disabled / muted / not yet checked
-  [bold #8b0000 on #2e2e2e] BLOCKED [/] failing because a dependency is in ALERT (the dependency alerts, not this)
+  [#ff1a1a on #2e2e2e] BLOCKED [/] failing because a dependency is in ALERT (the dependency alerts, not this)
 
 The border pulses while anything is in ALERT. Config errors show in the
 banner under the top bar; the daemon keeps running the last good config.
@@ -383,7 +383,9 @@ class DetailScreen(Screen):
         self.query_one("#detail-stats", Static).update(stats)
 
         lats = self.store.latencies(self.key, 200)
-        self.query_one("#detail-spark", Sparkline).data = lats or [0]
+        spark = self.query_one("#detail-spark", Sparkline)
+        spark.display = bool(lats)  # no latency metric: don't draw a fake flat-out chart
+        spark.data = lats
         recent = self.store.results(self.key, 200)
         strip = Text()
         width = max(10, self.size.width - 6)

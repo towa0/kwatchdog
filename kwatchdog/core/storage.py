@@ -194,6 +194,10 @@ class Store:
         rows = self._x("SELECT * FROM results WHERE wkey=? ORDER BY ts DESC LIMIT ?", (key, limit)).fetchall()
         return [self._result(r) for r in rows]
 
+    def first_result_ts(self, key: str, since: float) -> float | None:
+        row = self._x("SELECT MIN(ts) FROM results WHERE wkey=? AND ts>=?", (key, since)).fetchone()
+        return row[0] if row and row[0] is not None else None
+
     def latencies(self, key: str, limit: int = 60) -> list[float]:
         rows = self._x(
             "SELECT latency_ms FROM results WHERE wkey=? AND latency_ms IS NOT NULL ORDER BY ts DESC LIMIT ?",

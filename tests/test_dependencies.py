@@ -124,3 +124,17 @@ async def test_warn_dependency_does_not_block(dep_daemon):
     SCRIPT.update(router=["WARN"], api=["ALERT"])
     await d.check_once("net/router")
     assert (await d.check_once("web/api")).status == Status.ALERT
+
+
+async def test_concurrent_failures_wait_for_the_root(dep_daemon):
+    """Root + several dependents failing at the same moment (e.g. right after startup): the
+    dependents must wait for the root's in-flight check, not race it."""
+    import asyncio
+
+    d = dep_daemon
+    SCRIPT.update(router=["SLOW_ALERT"], api=["ALERT"], site=["ALERT"], deep=["ALERT"])
+    results = await asyncio.gather(d.check_once("net/router"), d.check_once("web/api"),
+                                   d.check_once("web/site"), d.check_once("web/deep"))
+    assert [r.status for r in results] == [Status.ALERT] + [Status.BLOCKED] * 3
+    assert [n.watcher for n in SENT] == ["router"]
+    assert d.store.stats("net/router", 0)["checks"] == 1  # one shared check, not one per dependent
