@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kwatchdog"
+version = "0.1.0"
+description = "Modular terminal monitoring: asyncio daemon + Textual TUI, red on black."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "textual>=0.80",
+    "pydantic>=2.5",
+    "httpx>=0.25",
+    "ruamel.yaml>=0.18",
+]
+
+[project.optional-dependencies]
+system = ["psutil>=5.9"]
+dotenv = ["python-dotenv>=1.0"]
+toast = ["plyer>=2.1"]
+all = ["psutil>=5.9", "python-dotenv>=1.0"]
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "psutil>=5.9", "python-dotenv>=1.0"]
+
+[project.scripts]
+watchdog = "kwatchdog.cli:main"
+kwatchdog = "kwatchdog.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["kwatchdog*"]
+
+[tool.setuptools.package-data]
+kwatchdog = ["tui/*.tcss", "examples/*.yaml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
