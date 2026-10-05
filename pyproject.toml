@@ -24,7 +24,6 @@ all = ["psutil>=5.9", "python-dotenv>=1.0"]
 dev = ["pytest>=7", "pytest-asyncio>=0.23", "psutil>=5.9", "python-dotenv>=1.0"]
 
 [project.scripts]
-watchdog = "kwatchdog.cli:main"
 kwatchdog = "kwatchdog.cli:main"
 
 [tool.setuptools.packages.find]

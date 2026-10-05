@@ -255,7 +255,7 @@ class WatchdogApp(App):
             if snap.daemon.get("status_url"):
                 t.append(f"{snap.daemon['status_url']} ", style=GRAY)
         else:
-            t.append("  daemon SLEEPING - run `watchdog daemon` ", style=f"bold {RED}")
+            t.append("  daemon SLEEPING - run `kwatchdog daemon` ", style=f"bold {RED}")
         t.append("  ")
         for s in (Status.ALERT, Status.WARN, Status.BLOCKED, Status.OK, Status.SLEEPING):
             t.append(f" {c[s]} {s.value} ", style=STATUS_STYLE[s] if c[s] else GRAY)
@@ -283,7 +283,7 @@ class WatchdogApp(App):
         b = main.query_one("#banner", Static)
         lines = [Text(f"✖ {e}", style=f"bold {RED}") for e in snap.errors[:4]]
         if len(snap.errors) > 4:
-            lines.append(Text(f"  … {len(snap.errors) - 4} more (watchdog validate)", style=DARK))
+            lines.append(Text(f"  … {len(snap.errors) - 4} more (kwatchdog validate)", style=DARK))
         lines += [Text(f"· {w}", style=GRAY) for w in snap.warnings[: max(0, 5 - len(lines))]]
         b.set_class(bool(lines), "show")
         b.update(Text("\n").join(lines) if lines else "")

@@ -6,7 +6,7 @@
   messages or metrics is ever substituted into them.
 * Every attempt (run, dry-run, pending, rate-limited, rejected, off) is a row
   in ``remediation_runs`` with its exit code and output.
-* Kill switch: ``watchdog autofix off|dry-run|on`` (stored in the DB, read on
+* Kill switch: ``kwatchdog autofix off|dry-run|on`` (stored in the DB, read on
   every attempt) and ``settings.autofix: false`` in config.
 * A fix that fails, times out, or hits its rate limit sends an ALERT through
   the normal channels.
@@ -107,7 +107,7 @@ class Remediator:
             return
         if oa.require_confirm:
             rid = self.store.add_run(key, oa.command, argv, "pending")
-            msg = f"autofix '{oa.command}' needs confirmation: watchdog autofix confirm {rid}"
+            msg = f"autofix '{oa.command}' needs confirmation: kwatchdog autofix confirm {rid}"
             await self.d.dispatch(spec, Action("autofix", Status.WARN, msg, notify=True))
             return
         rid = self.store.add_run(key, oa.command, argv, "run")

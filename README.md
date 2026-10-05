@@ -69,38 +69,38 @@ second package is only needed for desktop toasts), then use a venv or pipx.
 ## Quick start
 
 ```bash
-watchdog init                                   # ~/.watchdog/config.yaml
-watchdog add web                                # new project
-watchdog add web site http url=https://example.com body_regex="Example Domain" interval=30s
-watchdog check                                  # run every check once (exit 0/1/2)
-watchdog run                                    # daemon + TUI in one process
+kwatchdog init                                   # ~/.watchdog/config.yaml
+kwatchdog add web                                # new project
+kwatchdog add web site http url=https://example.com body_regex="Example Domain" interval=30s
+kwatchdog check                                  # run every check once (exit 0/1/2)
+kwatchdog run                                    # daemon + TUI in one process
 ```
 
 For long-running use, run the daemon as a service and attach the TUI whenever
 you need it:
 
 ```bash
-watchdog daemon          # headless, logs to ~/.watchdog/daemon.log
-watchdog tui             # client; reads the same SQLite DB, sends commands back
+kwatchdog daemon          # headless, logs to ~/.watchdog/daemon.log
+kwatchdog tui             # client; reads the same SQLite DB, sends commands back
 ```
 
 ### CLI
 
 | command | what it does |
 |---|---|
-| `watchdog daemon [-v] [-q]` | run the checking daemon |
-| `watchdog tui` | TUI client for a running daemon |
-| `watchdog run` (or just `watchdog`) | daemon + TUI in one process |
-| `watchdog add PROJECT [NAME TYPE key=value…]` | add a project or watcher. Validated before writing, comments kept |
-| `watchdog check [project[/watcher]] [-v]` | run checks once and print them. Exit code 0 = OK, 1 = WARN, 2 = ALERT |
-| `watchdog list` | current status from the DB |
-| `watchdog validate` | validate the config, list errors and warnings |
-| `watchdog plugins [-v]` | list watcher and channel types, availability, options |
-| `watchdog ping NAME` | send a heartbeat locally |
-| `watchdog notify-test [CHANNEL]` | send a test notification |
-| `watchdog digest [--send] [--hours N]` | print (or send) the daily digest now |
-| `watchdog autofix on\|off\|dry-run\|status\|list\|confirm ID\|reject ID` | auto-remediation kill switch and run log |
-| `watchdog init [--force]` | write a starter config |
+| `kwatchdog daemon [-v] [-q]` | run the checking daemon |
+| `kwatchdog tui` | TUI client for a running daemon |
+| `kwatchdog run` (or just `kwatchdog`) | daemon + TUI in one process |
+| `kwatchdog add PROJECT [NAME TYPE key=value…]` | add a project or watcher. Validated before writing, comments kept |
+| `kwatchdog check [project[/watcher]] [-v]` | run checks once and print them. Exit code 0 = OK, 1 = WARN, 2 = ALERT |
+| `kwatchdog list` | current status from the DB |
+| `kwatchdog validate` | validate the config, list errors and warnings |
+| `kwatchdog plugins [-v]` | list watcher and channel types, availability, options |
+| `kwatchdog ping NAME` | send a heartbeat locally |
+| `kwatchdog notify-test [CHANNEL]` | send a test notification |
+| `kwatchdog digest [--send] [--hours N]` | print (or send) the daily digest now |
+| `kwatchdog autofix on\|off\|dry-run\|status\|list\|confirm ID\|reject ID` | auto-remediation kill switch and run log |
+| `kwatchdog init [--force]` | write a starter config |
 
 `-c/--config PATH` selects another config file. `$WATCHDOG_HOME` (default
 `~/.watchdog`) holds the config, DB, log, `.env` and `plugins/`.
@@ -185,7 +185,7 @@ and the others keep running.
 | `heartbeat` | dead-man's switch: silent too long | `ping`, `max_silence`, `warn_silence` |
 | `shell` | exit code + stdout (regex / JSON / Nagios) | `command`, `ok_exit`, `warn_exit`, `regex`, `json_path`, `alert_regex`, `nagios`, `env` |
 
-Run `watchdog plugins -v` to see every option with its default.
+Run `kwatchdog plugins -v` to see every option with its default.
 
 To match a Python script with `process`, use `cmdline: myscript.py`. The
 process *name* of a script is its interpreter or entry point, not the script
@@ -196,7 +196,7 @@ arrives within `max_silence`, you get an alert.
 
 ```bash
 ./nightly_job.sh && curl -fsS http://raspberrypi:8787/ping/nightly
-# or, on the same machine:  watchdog ping nightly
+# or, on the same machine:  kwatchdog ping nightly
 ```
 
 Set `heartbeat_host: 0.0.0.0` to accept pings from other machines. `/health`
@@ -268,7 +268,7 @@ projects:
           command: restart-scraper   # a NAME from remediations:, never a command line
           max_runs_per_hour: 3
           cooldown: 10m
-          require_confirm: false     # true = queue it, a human runs `watchdog autofix confirm ID`
+          require_confirm: false     # true = queue it, a human runs `kwatchdog autofix confirm ID`
           dry_run: false             # true = log what would run, never run it
 ```
 
@@ -284,18 +284,18 @@ The rules:
 * Every attempt is a row in the `remediation_runs` table: mode (`run`,
   `dry-run`, `pending`, `rate-limited`, `rejected`, `expired`, `off`), exit
   code, output (redacted, last 4 KB) and duration. See them with
-  `watchdog autofix list -v` or in the TUI detail view.
+  `kwatchdog autofix list -v` or in the TUI detail view.
 * After a successful fix the watcher is re-checked immediately. If the fix
   exits non-zero, can't start, or times out, an **ALERT** goes out
   (`autofix 'restart-scraper' FAILED (exit 1): …`). Hitting the rate limit
   sends one ALERT per hour and stops trying.
-* Kill switch: `watchdog autofix off` stops everything right away (it is
-  stored in the DB and checked on every attempt). `watchdog autofix dry-run`
-  logs without running, and `watchdog autofix on` turns it back on. Also in
+* Kill switch: `kwatchdog autofix off` stops everything right away (it is
+  stored in the DB and checked on every attempt). `kwatchdog autofix dry-run`
+  logs without running, and `kwatchdog autofix on` turns it back on. Also in
   the TUI palette. `settings.autofix: false` is the master switch in config.
   While it's off, one `off` row per incident shows what would have run.
 * `require_confirm: true` sends a WARN with the run id. Confirm with
-  `watchdog autofix confirm ID` (or `f` in the TUI), or reject it. Pending
+  `kwatchdog autofix confirm ID` (or `f` in the TUI), or reject it. Pending
   requests expire after an hour, and confirming refuses to run while autofix
   is off or in dry-run.
 * The fix runs as the daemon's user. Give that user exactly the rights the
@@ -372,8 +372,8 @@ AUTOFIX (on): 2 attempt(s), 0 failed, 0 awaiting confirm
 "Silently stale" lists things that look fine at a glance but aren't watching
 anything: no check for longer than `stale_factor` × interval, never checked,
 muted for more than a day, disabled, config errors, and watchers switched off
-by a missing dependency or the wrong platform. Run `watchdog digest` to print
-it now (`--hours 12` for a custom window), or `watchdog digest --send` to
+by a missing dependency or the wrong platform. Run `kwatchdog digest` to print
+it now (`--hours 12` for a custom window), or `kwatchdog digest --send` to
 deliver it.
 
 **Uptime budgets.** `slo: 99.9` allows 0.1 % of the month as downtime, which is
@@ -421,7 +421,7 @@ pulses when anything is in ALERT and refreshes itself, with no JavaScript.
   phone, open `/?token=<token>` once. The server answers with an HttpOnly,
   SameSite=Strict cookie and redirects to `/`, so the token doesn't stay in
   the address bar. Tokens are compared in constant time.
-* **Binding.** Loopback by default. With `host: lan` and no token, `watchdog
+* **Binding.** Loopback by default. With `host: lan` and no token, `kwatchdog
   validate` warns you. `host: tailscale` asks `tailscale ip -4` for the
   address. If that fails, the page is **not** started (it never falls back to
   0.0.0.0) and the error shows in the TUI banner. Plain HTTP is fine over
@@ -448,7 +448,7 @@ NTFY_TOPIC=my-secret-topic
 GITHUB_TOKEN=ghp_…
 ```
 
-* `watchdog validate` warns when a key that looks like a secret (`token`,
+* `kwatchdog validate` warns when a key that looks like a secret (`token`,
   `password`, `webhook`, …) has a literal value in YAML.
 * Every expanded value is registered and **redacted** (`***`) from logs, stored
   results, raw output and notification text.
@@ -482,7 +482,7 @@ GITHUB_TOKEN=ghp_…
 
 The TUI reads SQLite once per second. Actions go to the daemon through a
 command table, so the client works the same whether the daemon runs embedded
-(`watchdog run`) or as a separate service. If no daemon is running, the top
+(`kwatchdog run`) or as a separate service. If no daemon is running, the top
 bar says `daemon SLEEPING`.
 
 ## Write your own watcher in 20 lines
@@ -542,7 +542,7 @@ What a watcher can use:
 
 If `check()` raises, the result becomes an `ALERT` with the traceback in the raw
 output. If a plugin file fails to import, the error is listed in the TUI and
-`watchdog plugins`, and the daemon keeps running. Channels work the same way:
+`kwatchdog plugins`, and the daemon keeps running. Channels work the same way:
 subclass `Channel`, set `type` and `Config`, and implement
 `async send(self, notification)`.
 
@@ -560,7 +560,7 @@ sudo loginctl enable-linger "$USER"         # start at boot, keep running after 
 journalctl --user -u kwatchdog -f           # or: tail -f ~/.watchdog/daemon.log
 ```
 
-Then `watchdog tui` over SSH. The unit reads secrets from `~/.watchdog/.env`
+Then `kwatchdog tui` over SSH. The unit reads secrets from `~/.watchdog/.env`
 through `EnvironmentFile`. To watch other systemd units, use the `systemd`
 watcher. Add `user: true` for user units.
 

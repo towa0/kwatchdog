@@ -15,7 +15,7 @@ from ._common import NO_WINDOW, Thresholds, evaluate, json_path, to_number
 
 
 class HeartbeatConfig(WatcherConfig):
-    ping: str  # projects call  GET http://host:8787/ping/<ping>  (or `watchdog ping <ping>`)
+    ping: str  # projects call  GET http://host:8787/ping/<ping>  (or `kwatchdog ping <ping>`)
     max_silence: Duration
     warn_silence: Duration | None = None
 

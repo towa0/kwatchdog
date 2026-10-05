@@ -214,7 +214,7 @@ def build_digest(cfg: "AppConfig", store: "Store", now: float, since: float,
 
     out = "\n".join(lines).splitlines()
     if len(out) > dcfg.max_lines:
-        out = out[: dcfg.max_lines - 1] + [f"… {len(out) - dcfg.max_lines + 1} more line(s) (watchdog digest)"]
+        out = out[: dcfg.max_lines - 1] + [f"… {len(out) - dcfg.max_lines + 1} more line(s) (kwatchdog digest)"]
     return overall, "\n".join(out)
 
 

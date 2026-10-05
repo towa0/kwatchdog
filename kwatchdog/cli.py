@@ -1,4 +1,4 @@
-"""Command line: watchdog daemon | tui | run | add | check | list | plugins | validate | ping | init."""
+"""Command line: kwatchdog daemon | tui | run | add | check | list | plugins | validate | ping | init."""
 from __future__ import annotations
 
 import argparse
@@ -126,7 +126,7 @@ def cmd_add(args: argparse.Namespace) -> int:
         print(f"added project '{args.project}'")
         return 0
     if not args.type:
-        print("error: watcher type required: watchdog add PROJECT NAME TYPE key=value ...", file=sys.stderr)
+        print("error: watcher type required: kwatchdog add PROJECT NAME TYPE key=value ...", file=sys.stderr)
         return 2
     body: dict[str, Any] = {"name": args.name, "type": args.type}
     for kv in args.options:
@@ -382,7 +382,7 @@ def cmd_digest(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="watchdog", description="kwatchdog - modular terminal monitoring")
+    p = argparse.ArgumentParser(prog="kwatchdog", description="kwatchdog - modular terminal monitoring")
     p.add_argument("--version", action="version", version=f"kwatchdog {__version__}")
     p.add_argument("-c", "--config", help="config file (default ~/.watchdog/config.yaml or $WATCHDOG_CONFIG)")
     sub = p.add_subparsers(dest="cmd")
@@ -450,6 +450,6 @@ def main(argv: list[str] | None = None) -> int:
             except Exception:
                 pass
     args = build_parser().parse_args(argv)
-    if not getattr(args, "fn", None):  # bare `watchdog` = run
+    if not getattr(args, "fn", None):  # bare `kwatchdog` = run
         args.fn, args.no_splash = cmd_run, False
     return int(args.fn(args) or 0)

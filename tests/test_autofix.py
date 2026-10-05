@@ -212,7 +212,7 @@ async def test_require_confirm(make_daemon):
         runs = d.store.runs("p/a")
         assert [r["mode"] for r in runs] == ["pending"]  # no duplicate while waiting
         note = [n for n in SENT if n.kind == "autofix"][0]
-        assert note.status == "WARN" and f"watchdog autofix confirm {runs[0]['id']}" in note.message
+        assert note.status == "WARN" and f"kwatchdog autofix confirm {runs[0]['id']}" in note.message
         set_mode(d.store, "off")
         assert "autofix is off" in await d.remediator.confirm(runs[0]["id"])
         set_mode(d.store, "on")

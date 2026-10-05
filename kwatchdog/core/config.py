@@ -111,7 +111,7 @@ class OnAlert(BaseModel):
     command: str  # name of an entry under top-level `remediations:`
     max_runs_per_hour: int = Field(3, ge=1, le=60)
     cooldown: Duration = 600.0  # min time between attempts for this watcher
-    require_confirm: bool = False  # queue it; a human confirms with `watchdog autofix confirm ID`
+    require_confirm: bool = False  # queue it; a human confirms with `kwatchdog autofix confirm ID`
     dry_run: bool = False  # log what would run, never run it
 
 
@@ -125,7 +125,7 @@ class Settings(BaseModel):
     heartbeat_port: int | None = 8787  # null disables the dead-man's-switch endpoint
     log_file: str | None = "daemon.log"
     retention_days: int = 30
-    autofix: bool = True  # master switch in config; `watchdog autofix off` is the runtime kill switch
+    autofix: bool = True  # master switch in config; `kwatchdog autofix off` is the runtime kill switch
     slo_lookback: Duration = 86400.0  # burn-rate window for uptime budget projections
     default_interval: Duration = 60.0
     default_timeout: Duration = 10.0

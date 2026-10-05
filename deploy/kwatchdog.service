@@ -10,7 +10,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 # pipx / pip --user install location; adjust if you use a venv
-ExecStart=%h/.local/bin/watchdog daemon --quiet
+ExecStart=%h/.local/bin/kwatchdog daemon --quiet
 Restart=on-failure
 RestartSec=5
 # secrets live here, not in config.yaml
