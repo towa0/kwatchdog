@@ -165,6 +165,7 @@ Sparkline > .sparkline--min-color { color: #8b0000; }
 #detail-raw-box { height: 1fr; border: round #8b0000; border-title-color: #ff1a1a; }
 #detail-raw { color: #ff1a1a; padding: 0 1; }
 #detail-incidents { height: 1fr; border: round #8b0000; border-title-color: #ff1a1a; }
+#detail-fixes { height: 1fr; border: round #8b0000; border-title-color: #ff1a1a; }
 
 HelpScreen .dialog { width: 86; }
 #help-text { color: #ff1a1a; }

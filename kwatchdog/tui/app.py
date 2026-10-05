@@ -48,12 +48,13 @@ THEME = Theme(
 
 EVENT_STYLE = {"alert": RED, "escalation": f"bold {RED}", "update": RED, "recovery": DARK, "flapping": RED,
                "flap_end": DARK, "incident": DARK, "resolved": DARK, "reload": GRAY, "mute": GRAY,
-               "disable": GRAY, "enable": GRAY, "stable": DARK, "test": GRAY}
+               "disable": GRAY, "enable": GRAY, "stable": DARK, "test": GRAY, "autofix": RED,
+               "digest": DARK, "budget": f"bold {RED}"}
 EVENT_LABEL = {"alert": "NOTIFIED", "update": "WORSE", "escalation": "ESCALATED", "recovery": "RECOVERED",
                "flapping": "FLAPPING", "flap_end": "STABLE", "incident": "OPENED", "resolved": "CLOSED",
                "reload": "RELOAD", "mute": "MUTE", "disable": "DISABLED", "enable": "ENABLED", "test": "TEST",
-               "stable": "STABLE"}
-NOTIFY_KINDS = {"alert", "update", "escalation", "recovery", "flapping"}
+               "stable": "STABLE", "autofix": "AUTOFIX", "digest": "DIGEST", "budget": "BUDGET"}
+NOTIFY_KINDS = {"alert", "update", "escalation", "recovery", "flapping", "autofix", "budget"}
 
 
 class MainScreen(Screen):
@@ -71,6 +72,7 @@ class MainScreen(Screen):
         Binding("question_mark", "app.help", "help"),
         Binding("ctrl+r", "app.reload", "reload"),
         Binding("t", "app.test_notify", "test notify", show=False),
+        Binding("f", "app.confirm_fix", "confirm fix", show=False),
         Binding("i", "app.about", "about", show=False),
         Binding("q", "app.quit", "quit"),
     ]
@@ -256,6 +258,10 @@ class WatchdogApp(App):
         for s in (Status.ALERT, Status.WARN, Status.BLOCKED, Status.OK, Status.SLEEPING):
             t.append(f" {c[s]} {s.value} ", style=STATUS_STYLE[s] if c[s] else GRAY)
             t.append(" ")
+        if snap.autofix_mode != "on":
+            t.append(f"  AUTOFIX {snap.autofix_mode.upper()} ", style=f"bold {DARK}")
+        if snap.pending_fixes:
+            t.append(f"  {len(snap.pending_fixes)} fix(es) awaiting confirm [f] ", style=f"bold {RED}")
         if snap.errors:
             t.append(f"  {len(snap.errors)} config error(s)", style=f"bold {RED}")
         t.append(f"   {dt.datetime.now():%H:%M:%S}", style=DARK)
@@ -503,6 +509,25 @@ class WatchdogApp(App):
         self.refresh_view(force=True)
         self.notify("config reload requested", timeout=2)
 
+    def action_confirm_fix(self) -> None:
+        """Confirm the pending autofix of the selected watcher (or the only pending one)."""
+        pending = self.snap.pending_fixes if self.snap else []
+        key = self.target()
+        mine = [r for r in pending if r["wkey"] == key] or (pending if len(pending) == 1 else [])
+        if not mine:
+            self.notify("no pending autofix for this watcher", severity="warning", timeout=3)
+            return
+        run = mine[0]
+        self.store.push_command("fix_confirm", run["wkey"], str(run["id"]))
+        self.notify(f"confirmed autofix #{run['id']} ({run['action']}) for {run['wkey']}", timeout=4)
+
+    def action_autofix_mode(self, mode: str) -> None:
+        from ..core.remediation import set_mode
+
+        set_mode(self.store, mode)
+        self.notify(f"autofix: {mode}", timeout=3)
+        self.refresh_view(force=True)
+
     def action_test_notify(self) -> None:
         self.store.push_command("test", self.target())
         self.notify("test notification queued", timeout=2)
@@ -520,6 +545,13 @@ class WatchdogApp(App):
         yield SystemCommand("Mute selected", "Mute for N minutes", self.action_mute_selected)
         yield SystemCommand("Unmute all", "Clear every mute", lambda: self.store.push_command("mute", "*", "0"))
         yield SystemCommand("Send test notification", "Through all channels", self.action_test_notify)
+        yield SystemCommand("Autofix: OFF (kill switch)", "Stop all auto-remediation",
+                            lambda: self.action_autofix_mode("off"))
+        yield SystemCommand("Autofix: dry-run", "Log what would run, run nothing",
+                            lambda: self.action_autofix_mode("dry-run"))
+        yield SystemCommand("Autofix: on", "Re-enable auto-remediation", lambda: self.action_autofix_mode("on"))
+        yield SystemCommand("Confirm pending fix", "Run the queued fix of the selected watcher",
+                            self.action_confirm_fix)
         yield SystemCommand("Help", "Key bindings", self.action_help)
         yield SystemCommand("About kwatchdog", "The dog", self.action_about)
         if self.snap:

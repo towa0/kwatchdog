@@ -136,7 +136,8 @@ class Notification(BaseModel):
 
     @property
     def title(self) -> str:
-        tag = {"recovery": "RECOVERED", "escalation": "ESCALATED", "flapping": "FLAPPING"}.get(
+        tag = {"recovery": "RECOVERED", "escalation": "ESCALATED", "flapping": "FLAPPING",
+               "autofix": "AUTOFIX", "digest": "DIGEST", "budget": "BUDGET"}.get(
             self.kind, self.status
         )
         return f"[{tag}] {self.project}/{self.watcher}"

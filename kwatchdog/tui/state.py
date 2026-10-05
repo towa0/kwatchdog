@@ -11,6 +11,7 @@ from ..core.config import AppConfig, ConfigError, load_config
 from ..core.daemon import CONFIG_ERRORS, CONFIG_WARNINGS, daemon_alive
 from ..core.models import Status
 from ..core.plugin import registries
+from ..core.remediation import get_mode
 from ..core.storage import EventRow, Store, WatcherRow
 
 STATUS_STYLE = {
@@ -65,6 +66,8 @@ class Snapshot:
     daemon: dict | None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    autofix_mode: str = "on"
+    pending_fixes: list[dict] = field(default_factory=list)
     ts: float = field(default_factory=time.time)
 
     def status(self, key: str) -> Status:
@@ -126,4 +129,6 @@ class StateReader:
             daemon=daemon,
             errors=list(errors),
             warnings=list(warnings),
+            autofix_mode=get_mode(self.store),
+            pending_fixes=[r for r in self.store.runs(limit=100) if r["mode"] == "pending"],
         )

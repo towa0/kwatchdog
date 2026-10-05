@@ -98,6 +98,7 @@ watchdog tui             # client; reads the same SQLite DB, sends commands back
 | `watchdog plugins [-v]` | list watcher and channel types, availability, options |
 | `watchdog ping NAME` | send a heartbeat locally |
 | `watchdog notify-test [CHANNEL]` | send a test notification |
+| `watchdog autofix on\|off\|dry-run\|status\|list\|confirm ID\|reject ID` | auto-remediation kill switch and run log |
 | `watchdog init [--force]` | write a starter config |
 
 `-c/--config PATH` selects another config file. `$WATCHDOG_HOME` (default
@@ -242,6 +243,61 @@ Two details:
   OK, and a dependency in WARN doesn't block anything. BLOCKED checks don't
   count against uptime.
 
+### Auto-remediation (strict)
+
+```yaml
+remediations:                        # the allowlist: nothing else can ever run
+  restart-scraper:
+    command: ["systemctl", "--user", "restart", "scraper"]   # argv, no shell
+    timeout: 60s
+  clear-tmp:
+    command: "find /tmp/scraper -mmin +60 -delete"           # a string is split, still no shell
+    cwd: /tmp
+
+projects:
+  scraper:
+    watchers:
+      - name: alive
+        type: process
+        cmdline: scraper.py
+        on_alert:
+          command: restart-scraper   # a NAME from remediations:, never a command line
+          max_runs_per_hour: 3
+          cooldown: 10m
+          require_confirm: false     # true = queue it, a human runs `watchdog autofix confirm ID`
+          dry_run: false             # true = log what would run, never run it
+```
+
+The rules:
+
+* A fix is attempted when a result is **ALERT** while an incident is open (that
+  is, after `min_failures`). Muted, flapping, BLOCKED or WARN watchers are
+  never touched. Further attempts follow `cooldown` and `max_runs_per_hour`.
+* The command is an argv list run with `create_subprocess_exec`, with no
+  shell. No templating exists, so watcher output, messages and metrics can't
+  reach it. `${VAR}` in `command`/`env` is expanded once at config load, like
+  any other config value.
+* Every attempt is a row in the `remediation_runs` table: mode (`run`,
+  `dry-run`, `pending`, `rate-limited`, `rejected`, `expired`, `off`), exit
+  code, output (redacted, last 4 KB) and duration. See them with
+  `watchdog autofix list -v` or in the TUI detail view.
+* After a successful fix the watcher is re-checked immediately. If the fix
+  exits non-zero, can't start, or times out, an **ALERT** goes out
+  (`autofix 'restart-scraper' FAILED (exit 1): …`). Hitting the rate limit
+  sends one ALERT per hour and stops trying.
+* Kill switch: `watchdog autofix off` stops everything right away (it is
+  stored in the DB and checked on every attempt). `watchdog autofix dry-run`
+  logs without running, and `watchdog autofix on` turns it back on. Also in
+  the TUI palette. `settings.autofix: false` is the master switch in config.
+  While it's off, one `off` row per incident shows what would have run.
+* `require_confirm: true` sends a WARN with the run id. Confirm with
+  `watchdog autofix confirm ID` (or `f` in the TUI), or reject it. Pending
+  requests expire after an hour, and confirming refuses to run while autofix
+  is off or in dry-run.
+* The fix runs as the daemon's user. Give that user exactly the rights the
+  fix needs, for example a `sudoers` line for one `systemctl restart`, and
+  nothing more.
+
 ### Alert rules in detail
 
 * An **incident** opens after `min_failures` consecutive WARN/ALERT results.
@@ -307,6 +363,7 @@ GITHUB_TOKEN=ghp_…
 | `ctrl+r` | reload config |
 | `ctrl+p` | command palette (run all, unmute all, test notification, jump to any watcher) |
 | `t` | test notification |
+| `f` | confirm the pending autofix of the selected watcher |
 | `?` / `i` / `q` | help / about (the dog) / quit |
 
 The TUI reads SQLite once per second. Actions go to the daemon through a

@@ -23,6 +23,7 @@ from .alerts import Action, AlertEngine, AlertState
 from .config import AppConfig, ChannelSpec, ConfigError, WatcherSpec, load_config
 from .models import Result, Status
 from .plugin import Channel, Notification, Registry, Watcher, WatcherContext, registries
+from .remediation import Remediator
 from .storage import Store
 
 log = logging.getLogger("kwatchdog.daemon")
@@ -82,6 +83,7 @@ class Daemon:
         self.started = time.time()
         self.on_notification = None  # optional callback(Notification) (embedded TUI)
         self._refreshing: set[str] = set()
+        self.remediator = Remediator(self)
         self.dep_refresh_age = 10.0  # re-check a dependency first if its result is older than this
 
     # ------------------------------------------------------------------ setup
@@ -304,6 +306,10 @@ class Daemon:
         muted = bool(row and row.muted())
         actions = self.engine.process(st, result, spec.rule, result.ts, muted=muted)
         await self._apply_actions(spec, st, actions)
+        try:
+            await self.remediator.after_result(spec, st, result, muted)
+        except Exception:
+            log.exception("autofix failed for %s", key)
 
     async def _apply_actions(self, spec: WatcherSpec, st: AlertState, actions: list[Action]) -> None:
         assert self.store is not None
@@ -457,6 +463,12 @@ class Daemon:
                                  "disabled" if on else "enabled")
         elif kind == "reload":
             self.reload()
+        elif kind in ("fix_confirm", "fix_reject"):
+            try:
+                msg = await self.remediator.confirm(int(arg), approve=kind == "fix_confirm")
+            except ValueError:
+                msg = f"bad run id {arg!r}"
+            self.store.add_event(target, "autofix", "OK", msg)
         elif kind == "test":
             spec = self.specs.get(target) or next(iter(self.specs.values()), None)
             if spec:
@@ -549,6 +561,8 @@ class Daemon:
         log.info("daemon started: %d watchers", len(self.specs))
 
     async def stop(self) -> None:
+        for t in list(self.remediator._tasks):
+            t.cancel()
         for k in list(self.tasks):
             self._stop_watcher(k)
         for t in self._bg:

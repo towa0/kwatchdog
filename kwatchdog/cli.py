@@ -305,6 +305,50 @@ def cmd_notify_test(args: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_autofix(args: argparse.Namespace) -> int:
+    """Kill switch + run log for auto-remediation."""
+    import datetime as dt
+
+    from .core.daemon import daemon_alive
+    from .core.remediation import get_mode, set_mode
+
+    store = _store(_cfg_path(args))
+    action = args.action
+    if action in ("on", "off", "dry-run"):
+        set_mode(store, action)
+        print(f"autofix: {action}")
+        return 0
+    if action == "status":
+        print(f"autofix: {get_mode(store)}")
+        pending = [r for r in store.runs(limit=200) if r["mode"] == "pending"]
+        for r in pending:
+            print(f"  pending #{r['id']} {r['wkey']}: {r['action']} ({r['command']})")
+        return 0
+    if action == "list":
+        for r in store.runs(limit=args.limit):
+            when = dt.datetime.fromtimestamp(r["ts"]).strftime("%m-%d %H:%M:%S")
+            code = "" if r["exit_code"] is None else f"exit {r['exit_code']}"
+            print(f"#{r['id']:<5} {when}  {r['mode']:<12} {r['wkey']:<28} {r['action']:<16} {code}")
+            if args.verbose and r.get("output"):
+                print("      " + r["output"].strip().replace("\n", "\n      ")[-1500:])
+        return 0
+    if action in ("confirm", "reject"):
+        if not args.id:
+            print("error: run id required", file=sys.stderr)
+            return 2
+        row = store.run(int(args.id))
+        if row is None or row["mode"] != "pending":
+            print(f"error: run #{args.id} is not pending", file=sys.stderr)
+            return 1
+        if not daemon_alive(store):
+            print("error: the daemon isn't running; it executes confirmed fixes", file=sys.stderr)
+            return 1
+        store.push_command("fix_confirm" if action == "confirm" else "fix_reject", row["wkey"], str(args.id))
+        print(f"{action} queued for run #{args.id} ({row['wkey']}: {row['action']})")
+        return 0
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="watchdog", description="kwatchdog - modular terminal monitoring")
     p.add_argument("--version", action="version", version=f"kwatchdog {__version__}")
@@ -348,6 +392,13 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("init", help="write a starter config")
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_init)
+    s = sub.add_parser("autofix", help="auto-remediation: on | off | dry-run | status | list | confirm ID | reject ID")
+    s.add_argument("action", choices=["on", "off", "dry-run", "status", "list", "confirm", "reject"])
+    s.add_argument("id", nargs="?")
+    s.add_argument("-n", "--limit", type=int, default=30)
+    s.add_argument("-v", "--verbose", action="store_true", help="show command output")
+    s.set_defaults(fn=cmd_autofix)
+
     s = sub.add_parser("notify-test", help="send a test notification through channels")
     s.add_argument("channel", nargs="?")
     s.set_defaults(fn=cmd_notify_test)

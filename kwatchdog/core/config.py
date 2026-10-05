@@ -78,6 +78,41 @@ def parse_quiet_hours(spec: str) -> tuple[int, int]:
         raise ValueError(f"quiet_hours {spec!r} must look like '23:00-07:00'") from None
 
 
+class Remediation(BaseModel):
+    """An allowlisted fix. Runs as an argv list without a shell; nothing from
+    check output is ever substituted into it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    command: list[str]  # argv; a string is split shell-style (no shell is used to run it)
+    cwd: str | None = None
+    timeout: Duration = 60.0
+    env: dict[str, str] = Field(default_factory=dict)  # ${VAR} allowed (config, not output)
+
+    @field_validator("command", mode="before")
+    @classmethod
+    def _argv(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            import shlex
+            import sys
+
+            parts = shlex.split(v, posix=not sys.platform.startswith("win"))
+            v = [p[1:-1] if len(p) >= 2 and p[0] == p[-1] == '"' else p for p in parts]
+        if not v:
+            raise ValueError("command must not be empty")
+        return v
+
+
+class OnAlert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command: str  # name of an entry under top-level `remediations:`
+    max_runs_per_hour: int = Field(3, ge=1, le=60)
+    cooldown: Duration = 600.0  # min time between attempts for this watcher
+    require_confirm: bool = False  # queue it; a human confirms with `watchdog autofix confirm ID`
+    dry_run: bool = False  # log what would run, never run it
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -88,6 +123,7 @@ class Settings(BaseModel):
     heartbeat_port: int | None = 8787  # null disables the dead-man's-switch endpoint
     log_file: str | None = "daemon.log"
     retention_days: int = 30
+    autofix: bool = True  # master switch in config; `watchdog autofix off` is the runtime kill switch
     default_interval: Duration = 60.0
     default_timeout: Duration = 10.0
 
@@ -116,6 +152,7 @@ class WatcherSpec:
     config: PluginConfig | None = None  # validated, env-expanded plugin config
     error: str | None = None  # config error -> watcher can't run
     unavailable: str | None = None  # missing dep / wrong platform -> disabled
+    on_alert: OnAlert | None = None
     depends_on_raw: list[str] = field(default_factory=list)  # as written (watcher, project/watcher, project)
     depends_on: list[str] = field(default_factory=list)  # resolved watcher keys
 
@@ -132,6 +169,7 @@ class WatcherSpec:
         return (
             self.type, self.interval, self.timeout, self.retries, self.retry_delay,
             self.enabled, repr(self.options), self.rule.model_dump_json(), self.error, self.unavailable,
+            self.on_alert.model_dump_json() if self.on_alert else None,
         )
 
 
@@ -162,6 +200,7 @@ class AppConfig:
     projects: dict[str, ProjectSpec] = field(default_factory=dict)
     channels: dict[str, ChannelSpec] = field(default_factory=dict)
     rules: dict[str, AlertRule] = field(default_factory=lambda: {"default": AlertRule()})
+    remediations: dict[str, Remediation] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -223,7 +262,7 @@ def load_config(
 
     cfg = AppConfig(path=path)
     cfg.warnings.extend(secrets.literal_secret_warnings(raw))
-    unknown = set(raw) - {"settings", "channels", "alerts", "projects"}
+    unknown = set(raw) - {"settings", "channels", "alerts", "projects", "remediations"}
     for k in sorted(unknown):
         cfg.errors.append(f"unknown top-level key '{k}'")
 
@@ -245,6 +284,22 @@ def load_config(
         except (ValidationError, TypeError) as e:
             msg = _fmt_validation(e) if isinstance(e, ValidationError) else str(e)
             cfg.errors.append(f"alerts.{rname}: {msg}")
+
+    # allowlisted remediation commands
+    rem_raw = raw.get("remediations") or {}
+    if not isinstance(rem_raw, dict):
+        cfg.errors.append("remediations: must be a mapping of name -> {command: [...]}")
+        rem_raw = {}
+    for rname, rbody in rem_raw.items():
+        missing: list[str] = []
+        body = secrets.expand(rbody if isinstance(rbody, dict) else {"command": rbody}, missing=missing)
+        if missing:
+            cfg.errors.append(f"remediations.{rname}: environment variable(s) not set: {', '.join(sorted(set(missing)))}")
+            continue
+        try:
+            cfg.remediations[str(rname)] = Remediation.model_validate(body)
+        except ValidationError as e:
+            cfg.errors.append(f"remediations.{rname}: {_fmt_validation(e)}")
 
     # channels
     for cname, cbody in (raw.get("channels") or {}).items():
@@ -390,6 +445,14 @@ def _load_watcher(proj: ProjectSpec, idx: int, body: Any, proj_rule: AlertRule,
     spec.retries, spec.retry_delay = common.retries, common.retry_delay
     spec.enabled, spec.description, spec.tags = common.enabled, common.description, common.tags
     spec.depends_on_raw = [common.depends_on] if isinstance(common.depends_on, str) else list(common.depends_on)
+    if common.on_alert is not None:
+        try:
+            spec.on_alert = OnAlert.model_validate(common.on_alert)
+        except ValidationError as e:
+            return fail(f"on_alert: {_fmt_validation(e)}")
+        if spec.on_alert.command not in cfg.remediations:
+            return fail(f"on_alert.command '{spec.on_alert.command}' is not an entry under remediations: "
+                        "(only allowlisted commands can run)")
     try:
         spec.rule = _resolve_rule(common.alerts, proj_rule, cfg)
     except ValueError as e:

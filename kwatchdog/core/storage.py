@@ -81,6 +81,20 @@ CREATE TABLE IF NOT EXISTS heartbeats (
     ts REAL NOT NULL,
     count INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS remediation_runs (
+    id INTEGER PRIMARY KEY,
+    ts REAL NOT NULL,
+    wkey TEXT NOT NULL,
+    action TEXT NOT NULL,
+    command TEXT,
+    mode TEXT NOT NULL,      -- run | dry-run | pending | rate-limited | rejected | off
+    exit_code INTEGER,
+    output TEXT,
+    duration_ms REAL,
+    finished REAL
+);
+CREATE INDEX IF NOT EXISTS ix_runs_key_ts ON remediation_runs(wkey, ts);
 """
 
 
@@ -330,8 +344,45 @@ class Store:
         return row[0] if row else None
 
     # ------------------------------------------------------------- maintenance
+    # ----------------------------------------------------------- remediation
+    def add_run(self, key: str, action: str, command: str, mode: str, ts: float | None = None) -> int:
+        cur = self._x("INSERT INTO remediation_runs (ts, wkey, action, command, mode) VALUES (?,?,?,?,?)",
+                      (ts or time.time(), key, action, redact(command), mode))
+        return int(cur.lastrowid)
+
+    def finish_run(self, rid: int, exit_code: int | None, output: str, duration_ms: float,
+                   mode: str | None = None) -> None:
+        self._x("UPDATE remediation_runs SET exit_code=?, output=?, duration_ms=?, finished=? WHERE id=?",
+                (exit_code, redact(output)[-4000:], duration_ms, time.time(), rid))
+        if mode:
+            self._x("UPDATE remediation_runs SET mode=? WHERE id=?", (mode, rid))
+
+    def set_run_mode(self, rid: int, mode: str) -> None:
+        self._x("UPDATE remediation_runs SET mode=? WHERE id=?", (mode, rid))
+
+    def runs(self, key: str | None = None, limit: int = 50) -> list[dict]:
+        if key:
+            rows = self._x("SELECT * FROM remediation_runs WHERE wkey=? ORDER BY id DESC LIMIT ?", (key, limit))
+        else:
+            rows = self._x("SELECT * FROM remediation_runs ORDER BY id DESC LIMIT ?", (limit,))
+        return [dict(r) for r in rows.fetchall()]
+
+    def run(self, rid: int) -> dict | None:
+        row = self._x("SELECT * FROM remediation_runs WHERE id=?", (rid,)).fetchone()
+        return dict(row) if row else None
+
+    def count_runs(self, key: str, since: float, modes: tuple[str, ...]) -> int:
+        q = f"SELECT COUNT(*) FROM remediation_runs WHERE wkey=? AND ts>=? AND mode IN ({','.join('?' * len(modes))})"
+        return int(self._x(q, (key, since, *modes)).fetchone()[0])
+
+    def last_run(self, key: str, modes: tuple[str, ...]) -> dict | None:
+        q = f"SELECT * FROM remediation_runs WHERE wkey=? AND mode IN ({','.join('?' * len(modes))}) ORDER BY id DESC LIMIT 1"
+        row = self._x(q, (key, *modes)).fetchone()
+        return dict(row) if row else None
+
     def prune(self, retention_days: int) -> None:
         cutoff = time.time() - retention_days * 86400
+        self._x("DELETE FROM remediation_runs WHERE ts < ?", (cutoff,))
         self._x("DELETE FROM results WHERE ts < ?", (cutoff,))
         self._x("DELETE FROM events WHERE ts < ?", (cutoff,))
         self._x("DELETE FROM commands WHERE done IS NOT NULL AND done < ?", (time.time() - 3600,))

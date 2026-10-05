@@ -77,7 +77,7 @@ HELP = """\
   r   run check now          m   mute N minutes (0 = unmute)
   d   disable / enable       a   add watcher (form)
   e   edit watcher           ctrl+r  reload config
-  t   send test notification
+  t   send test notification     f   confirm pending autofix
 
 [b]GENERAL[/b]
   ctrl+p  command palette     i  about     ?  this help     q  quit
@@ -318,6 +318,9 @@ class DetailScreen(Screen):
                 inc = DataTable(id="detail-incidents", cursor_type="row", cursor_foreground_priority="renderable")
                 inc.border_title = "incidents"
                 yield inc
+                fx = DataTable(id="detail-fixes", cursor_type="row", cursor_foreground_priority="renderable")
+                fx.border_title = "autofix runs"
+                yield fx
         yield Footer()
 
     def on_mount(self) -> None:
@@ -325,6 +328,7 @@ class DetailScreen(Screen):
         t.add_columns("time", "status", "latency", "message")
         inc = self.query_one("#detail-incidents", DataTable)
         inc.add_columns("opened", "duration", "status", "message")
+        self.query_one("#detail-fixes", DataTable).add_columns("#", "time", "mode", "exit", "output")
         self.refresh_data()
         self.set_interval(2.0, self.refresh_data)
         t.focus()
@@ -402,6 +406,13 @@ class DetailScreen(Screen):
             dur = fmt_age((i.closed or now) - i.opened) + ("" if i.closed else " (open)")
             inc.add_row(_ts(i.opened), dur, status_text(i.status) if not i.closed else Text(" closed", "#5f5f5f"),
                         ("[esc] " if i.escalated else "") + i.message[:120])
+
+        fx = self.query_one("#detail-fixes", DataTable)
+        fx.clear()
+        for r in self.store.runs(self.key, 20):
+            out = (r.get("output") or "").strip().splitlines()
+            fx.add_row(str(r["id"]), _ts(r["ts"]), Text(r["mode"], style="bold #ff1a1a" if r["mode"] == "pending" else "#8b0000"),
+                       "" if r["exit_code"] is None else str(r["exit_code"]), (out[-1] if out else "")[:80])
 
     def _show_raw(self) -> None:
         t = self.query_one("#detail-results", DataTable)

@@ -52,6 +52,11 @@ alerts:
     cooldown: 2m
     escalate_after: 10m
 
+remediations:                  # allowlist for on_alert; argv only, never a shell
+  restart-scraper:
+    command: ["systemctl", "--user", "restart", "scraper"]
+    timeout: 60s
+
 projects:
   website:
     description: public site + API
@@ -89,6 +94,7 @@ projects:
       - name: alive
         type: process
         cmdline: scraper.py
+        on_alert: {command: restart-scraper, max_runs_per_hour: 3, cooldown: 10m}
       - name: log
         type: logtail
         path: ~/scraper/scraper.log
