@@ -69,6 +69,7 @@ class LogTailConfig(WatcherConfig):
     ignore_case: bool = False
     min_matches: int = Field(1, ge=1)  # ALERT only if at least this many lines match
     from_start: bool = False  # first run: scan whole file instead of starting at the end
+    hold: Duration = 300.0  # keep ALERT/WARN this long after the last match (0 = edge-triggered)
     max_bytes: int = 2_000_000  # per check
     encoding: str = "utf-8"
 
@@ -133,9 +134,21 @@ class LogTailWatcher(Watcher):
                 warns.append(line)
         metrics = {"new_lines": float(len(lines)), "matches": float(len(alerts)), "warn_matches": float(len(warns))}
         raw = "\n".join((alerts + warns)[-50:])
+        now = time.time()
+        held = self.ctx.state_get("last_match")
+        holding = bool(held and c.hold and now - held["ts"] < c.hold)
         if len(alerts) >= c.min_matches:
-            return Result(Status.ALERT, f"{len(alerts)} matching line(s): {alerts[-1].strip()[:120]}", metrics, raw)
-        if warns or alerts:
+            res = Result(Status.ALERT, f"{len(alerts)} matching line(s): {alerts[-1].strip()[:120]}", metrics, raw)
+        elif warns or alerts:
             last = (warns or alerts)[-1].strip()[:120]
-            return Result(Status.WARN, f"{len(warns) + len(alerts)} warning line(s): {last}", metrics, raw)
-        return Result.ok(f"{len(lines)} new line(s), no matches", metrics=metrics)
+            res = Result(Status.WARN, f"{len(warns) + len(alerts)} warning line(s): {last}", metrics, raw)
+            if holding and held["status"] == "ALERT":
+                res.status = Status.ALERT  # don't downgrade an ALERT still being held
+        elif holding:
+            return Result(Status(held["status"]), f"{held['message']} ({fmt_age(now - held['ts'])} ago)",
+                          metrics, held.get("raw", ""))
+        else:
+            return Result.ok(f"{len(lines)} new line(s), no matches", metrics=metrics)
+        self.ctx.state_set("last_match", {"ts": now, "status": res.status.value, "message": res.message,
+                                          "raw": raw[-2000:]})
+        return res

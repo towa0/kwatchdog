@@ -1,0 +1,174 @@
+/* kwatchdog: red on black. #ff1a1a bright, #8b0000 dark, #000 bg, gray only for SLEEPING/muted. */
+
+Screen {
+    background: #000000;
+    color: #ff1a1a;
+    border: heavy #3a0000;
+}
+Screen.alerting.pulse-on { border: heavy #ff1a1a; }
+Screen.alerting.pulse-off { border: heavy #8b0000; }
+
+#topbar {
+    height: 1;
+    background: #000000;
+    color: #ff1a1a;
+    padding: 0 1;
+}
+#banner {
+    height: auto;
+    max-height: 6;
+    background: #000000;
+    color: #ff1a1a;
+    border-left: thick #ff1a1a;
+    padding: 0 1;
+    display: none;
+}
+#banner.show { display: block; }
+
+#main { height: 1fr; }
+
+#left {
+    width: 38;
+    border: round #8b0000;
+    border-title-color: #ff1a1a;
+}
+#left:focus-within { border: round #ff1a1a; }
+#search {
+    display: none;
+    border: none;
+    height: 1;
+    background: #1a0000;
+    color: #ff1a1a;
+    padding: 0 1;
+}
+#search.show { display: block; }
+
+#tree {
+    background: #000000;
+    scrollbar-size-vertical: 1;
+}
+#right { width: 1fr; }
+
+#table {
+    height: 1fr;
+    border: round #8b0000;
+    border-title-color: #ff1a1a;
+    background: #000000;
+}
+#table:focus { border: round #ff1a1a; }
+
+#feed {
+    height: 12;
+    border: round #8b0000;
+    border-title-color: #ff1a1a;
+    background: #000000;
+}
+#feed:focus { border: round #ff1a1a; }
+
+DataTable > .datatable--header {
+    background: #000000;
+    color: #8b0000;
+    text-style: bold;
+}
+DataTable > .datatable--cursor {
+    background: #3a0000;
+    color: #ff1a1a;
+    text-style: bold;
+}
+DataTable:focus > .datatable--cursor { background: #5a0000; }
+DataTable > .datatable--hover { background: #1a0000; }
+Tree > .tree--cursor { background: #3a0000; color: #ff1a1a; text-style: bold; }
+Tree:focus > .tree--cursor { background: #5a0000; }
+Tree > .tree--guides { color: #8b0000; }
+Tree > .tree--guides-selected { color: #ff1a1a; }
+
+Footer { background: #000000; }
+
+/* ------------------------------------------------------------ splash/about */
+SplashScreen, AboutScreen {
+    align: center middle;
+    background: #000000;
+}
+#splash-box {
+    width: auto;
+    height: auto;
+    align: center middle;
+}
+#dog { width: auto; height: auto; color: #ff1a1a; }
+#title { width: 100%; content-align: center middle; color: #ff1a1a; text-style: bold; margin-top: 1; }
+#tagline { width: 100%; content-align: center middle; color: #8b0000; }
+#about-info { width: 100%; content-align: center middle; color: #5f5f5f; margin-top: 1; }
+
+/* ------------------------------------------------------------ modals */
+ModalScreen { background: #000000 80%; }
+.dialog {
+    width: 90;
+    max-width: 95%;
+    height: auto;
+    max-height: 90%;
+    border: heavy #ff1a1a;
+    background: #000000;
+    padding: 1 2;
+}
+.dialog-title { color: #ff1a1a; text-style: bold; margin-bottom: 1; }
+.dialog Label { color: #8b0000; }
+.form-row { height: 1; margin-bottom: 1; }
+.form-row Label { width: 18; }
+.form-row Input { border: none; height: 1; padding: 0 1; background: #1a0000; }
+.form-row Input:focus { border: none; background: #3a0000; }
+.form-row Select { height: 1; }
+.form-row Select > SelectCurrent { border: none; height: 1; padding: 0 1; background: #1a0000; }
+.form-row Select:focus > SelectCurrent { border: none; background: #3a0000; }
+.form-row Input, .form-row Select { width: 1fr; }
+.hint { color: #5f5f5f; }
+.error { color: #ff1a1a; text-style: bold; }
+.buttons { height: auto; align-horizontal: right; margin-top: 1; }
+Button {
+    background: #000000;
+    color: #ff1a1a;
+    border: tall #8b0000;
+    margin-left: 2;
+}
+Button:hover { background: #3a0000; }
+Button:focus { border: tall #ff1a1a; text-style: bold; }
+Button.-primary { background: #8b0000; color: #000000; }
+
+Input {
+    background: #0d0000;
+    color: #ff1a1a;
+    border: tall #3a0000;
+}
+Input:focus { border: tall #ff1a1a; }
+Input > .input--placeholder { color: #5f5f5f; }
+Select > SelectCurrent { background: #0d0000; color: #ff1a1a; border: tall #3a0000; }
+Select:focus > SelectCurrent { border: tall #ff1a1a; }
+Select > SelectOverlay { background: #000000; color: #ff1a1a; border: tall #ff1a1a; }
+
+#form-scroll { height: auto; max-height: 65vh; }
+#type-hint { margin-bottom: 1; }
+
+/* ------------------------------------------------------------ detail */
+DetailScreen { background: #000000; }
+#detail-head { height: auto; padding: 0 1; border-bottom: solid #8b0000; }
+#detail-stats { height: auto; padding: 0 1; color: #ff1a1a; }
+#detail-chart-box { height: 7; border: round #8b0000; border-title-color: #ff1a1a; padding: 0 1; }
+#detail-spark { height: 3; }
+Sparkline > .sparkline--max-color { color: #ff1a1a; }
+Sparkline > .sparkline--min-color { color: #8b0000; }
+#detail-strip { height: 1; }
+#detail-body { height: 1fr; }
+#detail-results { width: 3fr; border: round #8b0000; border-title-color: #ff1a1a; }
+#detail-results:focus { border: round #ff1a1a; }
+#detail-side { width: 2fr; }
+#detail-raw-box { height: 1fr; border: round #8b0000; border-title-color: #ff1a1a; }
+#detail-raw { color: #ff1a1a; padding: 0 1; }
+#detail-incidents { height: 1fr; border: round #8b0000; border-title-color: #ff1a1a; }
+
+HelpScreen .dialog { width: 86; }
+#help-text { color: #ff1a1a; }
+
+ToastRack { align: right bottom; }
+Toast { background: #000000; color: #ff1a1a; border-left: thick #ff1a1a; }
+Toast.-information { border-left: thick #8b0000; }
+Toast.-warning { border-left: thick #ff1a1a; }
+Toast.-error { border-left: outer #ff1a1a; text-style: bold; }

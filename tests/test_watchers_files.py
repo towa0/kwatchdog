@@ -48,7 +48,7 @@ async def test_logtail_new_lines_only(make, tmp_path):
     log = tmp_path / "app.log"
     log.write_text("ERROR old problem\n")
     ctx = Ctx()
-    w = make("logtail", ctx, path=str(log), warn_patterns=[r"\b429\b"])
+    w = make("logtail", ctx, path=str(log), warn_patterns=[r"\b429\b"], hold=0)
     r = await w.check()  # first run starts at end: old ERROR ignored
     assert r.status == Status.OK
     with log.open("a") as f:
@@ -67,7 +67,7 @@ async def test_logtail_partial_line_and_rotation(make, tmp_path):
     log = tmp_path / "app.log"
     log.write_text("")
     ctx = Ctx()
-    w = make("logtail", ctx, path=str(log))
+    w = make("logtail", ctx, path=str(log), hold=0)
     await w.check()
     with log.open("a") as f:
         f.write("ERR")  # partial line, not yet terminated
@@ -83,7 +83,7 @@ async def test_logtail_partial_line_and_rotation(make, tmp_path):
 async def test_logtail_ignore_and_min_matches(make, tmp_path):
     log = tmp_path / "app.log"
     log.write_text("")
-    w = make("logtail", path=str(log), ignore=["healthcheck"], min_matches=2)
+    w = make("logtail", path=str(log), ignore=["healthcheck"], min_matches=2, hold=0)
     await w.check()
     with log.open("a") as f:
         f.write("ERROR healthcheck flaky\nERROR real\n")
@@ -95,3 +95,18 @@ async def test_logtail_from_start(make, tmp_path):
     log = tmp_path / "app.log"
     log.write_text("ERROR from before\n")
     assert (await make("logtail", path=str(log), from_start=True).check()).status == Status.ALERT
+
+
+async def test_logtail_hold_keeps_alert(make, tmp_path, monkeypatch):
+    log = tmp_path / "app.log"
+    log.write_text("")
+    w = make("logtail", path=str(log), hold="5m")
+    await w.check()
+    with log.open("a") as f:
+        f.write("ERROR one\n")
+    assert (await w.check()).status == Status.ALERT
+    r = await w.check()  # no new lines, still inside hold window
+    assert r.status == Status.ALERT and "ago" in r.message
+    real = time.time
+    monkeypatch.setattr(time, "time", lambda: real() + 400)
+    assert (await w.check()).status == Status.OK
