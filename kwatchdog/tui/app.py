@@ -1,5 +1,3 @@
-"""Main TUI. Reads state from SQLite every second; actions go to the daemon via
-the commands table. ``embedded=True`` also runs the daemon in this process."""
 from __future__ import annotations
 
 import datetime as dt

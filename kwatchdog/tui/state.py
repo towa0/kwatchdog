@@ -1,4 +1,3 @@
-"""Read-side model for the TUI: config structure + live state from SQLite."""
 from __future__ import annotations
 
 import time
