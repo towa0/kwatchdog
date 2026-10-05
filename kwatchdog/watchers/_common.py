@@ -4,12 +4,16 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from ..core.models import Status
+
+# Hide console windows for child processes when running under pythonw / as a service on Windows.
+NO_WINDOW: dict = {"creationflags": 0x08000000} if sys.platform.startswith("win") else {}
 
 
 class Thresholds(BaseModel):

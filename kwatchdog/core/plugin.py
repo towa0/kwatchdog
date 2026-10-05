@@ -35,6 +35,7 @@ ChannelConfig = PluginConfig
 
 
 class _Pluggable:
+    RESERVED: ClassVar[frozenset[str]] = frozenset()  # keys the config layer owns
     type: ClassVar[str] = ""
     description: ClassVar[str] = ""
     Config: ClassVar[type[PluginConfig]] = PluginConfig
@@ -108,6 +109,9 @@ class WatcherContext:
 class Watcher(_Pluggable):
     """Subclass this. Set ``type``, a ``Config`` model, implement ``check``."""
 
+    RESERVED = frozenset({"name", "type", "interval", "timeout", "retries", "retry_delay", "enabled",
+                          "alerts", "description", "tags"})
+
     default_interval: ClassVar[float] = 60.0
 
     def __init__(self, name: str, config: PluginConfig, ctx: WatcherContext | None = None,
@@ -148,6 +152,8 @@ class Notification(BaseModel):
 
 
 class Channel(_Pluggable):
+    RESERVED = frozenset({"type", "ignore_quiet", "min_severity"})
+
     def __init__(self, name: str, config: PluginConfig):
         self.name = name
         self.config = config
@@ -168,6 +174,9 @@ class Registry(Generic[T]):
     def register(self, cls: type[T], source: str = "builtin") -> None:
         if not cls.type:
             raise ValueError(f"{cls.__name__} has no 'type'")
+        clash = cls.RESERVED & set(cls.Config.model_fields)
+        if clash:
+            raise ValueError(f"{cls.__name__}.Config uses reserved option name(s): {', '.join(sorted(clash))}")
         if cls.type in self.items and self.items[cls.type] is not cls:
             log.warning("plugin type %r from %s overrides %s", cls.type, source, self.items[cls.type].source)
         cls.source = source

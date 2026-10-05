@@ -71,10 +71,6 @@ class Snapshot:
             return Status.SLEEPING
         return row.status
 
-    def effective(self, key: str) -> Status:
-        """Status as displayed: muted watchers show SLEEPING unless failing."""
-        return self.status(key)
-
     def project_status(self, project: str) -> Status:
         p = self.config.projects.get(project)
         return Status.worst(self.status(w.key) for w in p.watchers) if p else Status.SLEEPING

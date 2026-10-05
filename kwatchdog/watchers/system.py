@@ -14,7 +14,7 @@ from ._common import Thresholds, evaluate
 
 
 class ProcessConfig(WatcherConfig):
-    name: str | None = None  # process name, case-insensitive ("python", "nginx.exe")
+    process: str | None = None  # process name, case-insensitive ("python", "nginx.exe")
     cmdline: str | None = None  # substring that must appear in the command line
     pid_file: str | None = None
     service: str | None = None  # Windows service name
@@ -22,8 +22,8 @@ class ProcessConfig(WatcherConfig):
 
     @model_validator(mode="after")
     def _one(self):
-        if not (self.name or self.cmdline or self.pid_file or self.service):
-            raise ValueError("set one of: name, cmdline, pid_file, service")
+        if not (self.process or self.cmdline or self.pid_file or self.service):
+            raise ValueError("set one of: process, cmdline, pid_file, service")
         return self
 
 
@@ -64,12 +64,12 @@ class ProcessWatcher(Watcher):
         matches = []
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             info = proc.info
-            if c.name and (info["name"] or "").lower() not in (c.name.lower(), c.name.lower() + ".exe"):
+            if c.process and (info["name"] or "").lower() not in (c.process.lower(), c.process.lower() + ".exe"):
                 continue
             if c.cmdline and c.cmdline not in " ".join(info["cmdline"] or []):
                 continue
             matches.append(info)
-        what = c.name or c.cmdline
+        what = c.process or c.cmdline
         raw = "\n".join(f"{m['pid']} {' '.join(m['cmdline'] or [m['name'] or ''])}" for m in matches[:50])
         if len(matches) < c.min_count:
             return Result(Status.ALERT, f"{what}: {len(matches)} running (need {c.min_count})",

@@ -73,3 +73,32 @@ def test_platform_gate():
         assert reason is None or "systemctl" in reason
     else:
         assert "only works on linux" in reason
+
+
+async def test_readme_tutorial_plugin(tmp_path):
+    """The 'write your own watcher' example in examples/plugins must keep working."""
+    from pathlib import Path
+
+    src = Path(__file__).parent.parent / "examples" / "plugins"
+    wr, cr = Registry(Watcher), Registry(Channel)
+    assert not load_external_plugins(src, [wr, cr])
+    cls = wr.items["inbox"]
+    for i in range(12):
+        (tmp_path / f"job{i}").write_text("x")
+    r = await cls("q", cls.Config(path=str(tmp_path))).check()
+    assert r.status.value == "WARN" and r.metrics["files"] == 12
+
+
+def test_reserved_option_names_rejected(tmp_path):
+    (tmp_path / "clash.py").write_text(textwrap.dedent("""
+        from kwatchdog.core.plugin import Watcher, WatcherConfig
+        class C(WatcherConfig):
+            name: str = 'x'
+        class W(Watcher):
+            type = 'clash'
+            Config = C
+    """))
+    wr, cr = Registry(Watcher), Registry(Channel)
+    errors = load_external_plugins(tmp_path, [wr, cr])
+    assert "clash" not in wr.items
+    assert any("reserved option name(s): name" in v for v in errors.values())

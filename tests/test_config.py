@@ -134,3 +134,16 @@ def test_roundtrip_edit_keeps_comments(tmp_path, regs):
     assert raw_watcher(p, "a", "w2")["port"] == 2
     with pytest.raises(ConfigError):
         add_project(p, "b")
+
+
+def test_example_config_is_valid(regs, monkeypatch):
+    from pathlib import Path
+
+    for var in ("NTFY_TOPIC", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "DISCORD_WEBHOOK", "SMTP_USER", "SMTP_PASSWORD"):
+        monkeypatch.setenv(var, "dummy-value")
+    cfg = load_config(Path(__file__).parent.parent / "examples" / "config.yaml", *regs)
+    assert cfg.errors == []
+    assert len(cfg.watchers()) >= 16
+    used = {w.type for w in cfg.watchers()}
+    assert set(regs[0].items) <= used  # every built-in watcher is demonstrated
+    assert set(regs[1].items) <= {c.type for c in cfg.channels.values()}

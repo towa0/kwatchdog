@@ -11,7 +11,7 @@ from pydantic import Field, field_validator
 
 from ..core.models import Duration, Result, Status, fmt_age
 from ..core.plugin import Watcher, WatcherConfig
-from ._common import Thresholds, evaluate, json_path, to_number
+from ._common import NO_WINDOW, Thresholds, evaluate, json_path, to_number
 
 
 class HeartbeatConfig(WatcherConfig):
@@ -69,12 +69,9 @@ class ShellWatcher(Watcher):
     async def check(self) -> Result:
         c: ShellConfig = self.config
         env = {**os.environ, **c.env}
-        kw = {}
-        if sys.platform.startswith("win"):
-            kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
         proc = await asyncio.create_subprocess_shell(
             c.command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            cwd=os.path.expanduser(c.cwd) if c.cwd else None, env=env, **kw)
+            cwd=os.path.expanduser(c.cwd) if c.cwd else None, env=env, **NO_WINDOW)
         try:
             out_b, err_b = await asyncio.wait_for(proc.communicate(), self.timeout)
         except asyncio.TimeoutError:
@@ -124,7 +121,8 @@ def _kill_tree(proc) -> None:
         if sys.platform.startswith("win"):
             import subprocess
 
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False,
+                           **NO_WINDOW)
         else:
             proc.kill()
     except ProcessLookupError:

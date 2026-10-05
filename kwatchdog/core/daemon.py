@@ -212,7 +212,6 @@ class Daemon:
         attempts = spec.retries + 1
         result = Result.alert("no result")
         for attempt in range(attempts):
-            t0 = time.perf_counter()
             try:
                 result = await asyncio.wait_for(watcher.check(), timeout=spec.timeout + 1)
                 if not isinstance(result, Result):

@@ -151,7 +151,7 @@ class WatcherForm(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         title = f"EDIT {self.project}/{self.original}" if self.original else "ADD WATCHER"
         types = [(k, k) for k in sorted(self.wreg.items)]
-        with Vertical(classes="dialog"):
+        with Vertical(classes="dialog form"):
             yield Static(title, classes="dialog-title")
             with VerticalScroll(id="form-scroll"):
                 with Horizontal(classes="form-row"):

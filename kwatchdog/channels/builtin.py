@@ -78,7 +78,7 @@ class DesktopChannel(Channel):
             pass
         if sys.platform.startswith("win"):
             subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", _ps_toast(title, body)],
-                           capture_output=True, timeout=_TIMEOUT, check=False)
+                           capture_output=True, timeout=_TIMEOUT, check=False, creationflags=0x08000000)
         else:
             subprocess.run(["notify-send", "-a", self.config.app_name, title, body[:250]],
                            capture_output=True, timeout=_TIMEOUT, check=False)
@@ -95,7 +95,9 @@ def _ps_toast(title: str, body: str) -> str:
         f"$x=$t.GetElementsByTagName('text');$x.Item(0).AppendChild($t.CreateTextNode({_ps_quote(title)}))|Out-Null;"
         f"$x.Item(1).AppendChild($t.CreateTextNode({_ps_quote(body[:250])}))|Out-Null;"
         "$n=[Windows.UI.Notifications.ToastNotification]::new($t);"
-        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('kwatchdog').Show($n)"
+        # unregistered AppIDs are silently dropped on Windows 10/11; borrow PowerShell's
+        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("
+        r"'{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show($n)"
     )
 
 

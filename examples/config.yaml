@@ -1,0 +1,180 @@
+# kwatchdog example config - every built-in watcher and channel.
+# Secrets are ${ENV_VARS}: put them in ~/.watchdog/.env (chmod 600) or the
+# real environment. Never write tokens directly in this file.
+
+settings:
+  heartbeat_host: 0.0.0.0     # listen on the LAN so other machines can ping
+  heartbeat_port: 8787        # GET http://host:8787/ping/<name>
+  retention_days: 30
+  default_interval: 60s
+  default_timeout: 10s
+
+channels:
+  bell:
+    type: bell
+  desktop:
+    type: desktop
+  phone:
+    type: ntfy
+    topic: ${NTFY_TOPIC}
+    ignore_quiet: true          # still delivered during quiet hours
+    min_severity: ALERT         # WARN never reaches the phone
+  telegram:
+    type: telegram
+    token: ${TELEGRAM_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  discord:
+    type: discord
+    webhook_url: ${DISCORD_WEBHOOK}
+  mail:
+    type: email
+    host: smtp.example.com
+    port: 587
+    username: ${SMTP_USER}
+    password: ${SMTP_PASSWORD}
+    sender: watchdog@example.com
+    to: [me@example.com]
+
+alerts:
+  default:                      # base for every watcher
+    severity: WARN              # minimum status that notifies
+    min_failures: 2             # consecutive failures before an incident opens
+    cooldown: 10m               # min time between notifications per watcher
+    flap_window: 10             # flapping = many OK<->fail changes in last N checks
+    flap_threshold: 0.5
+    quiet_hours: "23:00-07:00"  # only ignore_quiet channels; held alerts sent at 07:00
+    escalate_after: 30m         # still failing after 30m => escalation
+    channels: [bell, desktop, telegram]
+    escalate_channels: [phone, mail]
+  critical:                     # named rule: inherits from default
+    severity: ALERT
+    min_failures: 1
+    cooldown: 2m
+    escalate_after: 10m
+
+projects:
+  website:
+    description: public site + API
+    alerts: critical            # project-wide rule (name or inline overrides)
+    watchers:
+      - name: home
+        type: http
+        url: https://example.com
+        body_regex: "Example Domain"
+        latency_warn_ms: 800
+        latency_alert_ms: 3000
+        ssl_warn_days: 21
+        interval: 30s
+        retries: 1
+      - name: login-redirect
+        type: http
+        url: http://example.com/login
+        expect_status: [200]
+        max_redirects: 3
+        expect_final_url: https://example.com/login
+        check_ssl: false
+      - name: api-port
+        type: port
+        host: api.example.com
+        port: 443
+      - name: gateway
+        type: ping
+        host: 192.168.1.1
+        count: 3
+        latency_warn_ms: 50
+
+  scraper:
+    description: nightly price scraper
+    watchers:
+      - name: alive
+        type: process
+        cmdline: scraper.py
+      - name: log
+        type: logtail
+        path: ~/scraper/scraper.log
+        patterns: ['\bERROR\b', 'Traceback \(most recent call last\)']
+        warn_patterns: ['\b429\b', 'rate limit']
+        ignore: ['healthcheck']
+        hold: 10m
+      - name: output
+        type: file
+        path: ~/scraper/out/*.csv
+        warn_age: 26h
+        max_age: 30h
+        min_size: 1024
+      - name: health
+        type: scraper
+        db: ~/scraper/data.db
+        rows_query: SELECT COUNT(*) FROM listings WHERE day = date('now')
+        last_success_query: SELECT MAX(finished_at) FROM runs WHERE ok = 1
+        errors_query: SELECT SUM(errors) FROM runs WHERE day = date('now')
+        requests_query: SELECT SUM(requests) FROM runs WHERE day = date('now')
+        warn_drop_percent: 30
+        alert_drop_percent: 60
+        max_success_age: 26h
+        interval: 15m
+      - name: listings-table
+        type: datafile
+        path: ~/scraper/data.db
+        table: listings
+        timestamp_column: scraped_at
+        max_age: 26h
+        warn_z: 3
+        alert_z: 5
+      - name: nightly-ping
+        type: heartbeat         # cron job ends with: curl -fsS http://pi:8787/ping/scraper-nightly
+        ping: scraper-nightly
+        max_silence: 25h
+      - name: repo
+        type: git
+        path: ~/scraper
+        check_ci: true          # uses GITHUB_TOKEN from env if set
+        interval: 15m
+
+  trading:
+    watchers:
+      - name: btc
+        type: price
+        url: https://api.coinbase.com/v2/prices/BTC-USD/spot
+        path: data.amount
+        symbol: BTC
+        cross_above: 100000
+        cross_below: 50000
+        change_window: 30
+        change_alert_percent: 5
+        interval: 1m
+      - name: signal-queue
+        type: json
+        url: http://localhost:8000/metrics.json
+        path: queue.pending
+        label: pending signals
+        warn_above: 50
+        alert_above: 500
+      - name: backtest-sanity
+        type: shell
+        command: python ~/trading/check.py --json
+        json_path: sharpe
+        label: sharpe
+        warn_below: 0.5
+        timeout: 2m
+        interval: 1h
+
+  pi:
+    description: Raspberry Pi host
+    watchers:
+      - name: health
+        type: system
+        cpu: {warn_above: 85, alert_above: 97}
+        temp: {warn_above: 70, alert_above: 80}
+      - name: sd-card
+        type: disk
+        path: /
+        warn_percent: 80
+        alert_percent: 92
+      - name: nginx
+        type: systemd             # Linux only; shown as SLEEPING elsewhere
+        unit: nginx.service
+      - name: backups
+        type: shell
+        command: /usr/local/bin/check_backup   # Nagios plugin convention
+        nagios: true

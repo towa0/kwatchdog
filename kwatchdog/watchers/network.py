@@ -13,6 +13,7 @@ from pydantic import Field, field_validator
 
 from ..core.models import Result, Status
 from ..core.plugin import Watcher, WatcherConfig
+from ._common import NO_WINDOW
 
 
 class HttpConfig(WatcherConfig):
@@ -124,8 +125,7 @@ class HttpWatcher(Watcher):
                 der = writer.get_extra_info("ssl_object").getpeercert(binary_form=True)
                 not_after = _der_not_after(der)
             else:
-                not_after = parsedate_to_datetime(cert["notAfter"].replace("  ", " ")).timestamp() \
-                    if "," in cert["notAfter"] else ssl.cert_time_to_seconds(cert["notAfter"])
+                not_after = float(ssl.cert_time_to_seconds(cert["notAfter"]))
         finally:
             writer.close()
         self.ctx.state_set("cert", {"checked": time.time(), "not_after": not_after})
@@ -215,7 +215,7 @@ class PingWatcher(Watcher):
         c: PingConfig = self.config
         try:
             proc = await asyncio.create_subprocess_exec(*self._cmd(), stdout=asyncio.subprocess.PIPE,
-                                                        stderr=asyncio.subprocess.STDOUT)
+                                                        stderr=asyncio.subprocess.STDOUT, **NO_WINDOW)
         except FileNotFoundError:
             return Result.sleeping("ping binary not found")
         try:

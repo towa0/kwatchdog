@@ -1,0 +1,24 @@
+# systemd *user* unit for kwatchdog (Raspberry Pi / any Linux).
+#   mkdir -p ~/.config/systemd/user && cp deploy/kwatchdog.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now kwatchdog
+#   sudo loginctl enable-linger $USER     # keep running after logout / start at boot
+[Unit]
+Description=kwatchdog monitoring daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# pipx / pip --user install location; adjust if you use a venv
+ExecStart=%h/.local/bin/watchdog daemon --quiet
+Restart=on-failure
+RestartSec=5
+# secrets live here, not in config.yaml
+EnvironmentFile=-%h/.watchdog/.env
+Environment=PYTHONUNBUFFERED=1
+# be a good neighbour on a Pi
+Nice=5
+MemoryMax=200M
+
+[Install]
+WantedBy=default.target

@@ -10,6 +10,7 @@ from typing import Literal
 
 from ..core.models import Result, Status
 from ..core.plugin import Watcher, WatcherConfig
+from ._common import NO_WINDOW
 
 _GH_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+?)(?:\.git)?/?$")
 
@@ -40,7 +41,7 @@ class GitWatcher(Watcher):
         proc = await asyncio.create_subprocess_exec(
             "git", "-C", str(Path(self.config.path).expanduser()), *args,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, **NO_WINDOW)
         out, _ = await proc.communicate()
         return proc.returncode or 0, out.decode(errors="replace").strip()
 

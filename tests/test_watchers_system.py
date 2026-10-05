@@ -12,16 +12,16 @@ from kwatchdog.watchers.system import decode_throttled, systemd_result
 
 async def test_process_by_name(make):
     me = psutil.Process().name()
-    r = await make("process", name=me).check()
+    r = await make("process", process=me).check()
     assert r.status == Status.OK and r.metrics["count"] >= 1
-    r = await make("process", name="no-such-process-kw").check()
+    r = await make("process", process="no-such-process-kw").check()
     assert r.status == Status.ALERT
 
 
 async def test_process_cmdline_and_min_count(make):
     r = await make("process", cmdline="pytest").check()
     assert r.status == Status.OK
-    r = await make("process", name=psutil.Process().name(), min_count=100000).check()
+    r = await make("process", process=psutil.Process().name(), min_count=100000).check()
     assert r.status == Status.ALERT and "need 100000" in r.message
 
 

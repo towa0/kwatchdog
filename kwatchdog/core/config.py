@@ -96,7 +96,7 @@ class Settings(BaseModel):
         return p if p.is_absolute() else watchdog_home() / p
 
 
-COMMON_KEYS = {"name", "type", "interval", "timeout", "retries", "retry_delay", "enabled", "alerts", "description", "tags"}
+COMMON_KEYS = set(Watcher.RESERVED)
 
 
 @dataclass
@@ -202,7 +202,7 @@ def load_config(
     try:
         raw = _yaml_load(text) or {}
     except Exception as e:
-        raise ConfigError(f"YAML parse error: {e}") from e
+        raise ConfigError("YAML parse error: " + " ".join(str(e).split())) from e
     if not isinstance(raw, dict):
         raise ConfigError("top level of config must be a mapping")
 
