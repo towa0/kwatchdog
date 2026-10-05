@@ -116,7 +116,7 @@ class TelegramChannel(Channel):
         c = self.config
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             r = await client.post(f"{c.api_base}/bot{c.token}/sendMessage",
-                                  json={"chat_id": c.chat_id, "text": n.text, "disable_web_page_preview": True})
+                                  json={"chat_id": c.chat_id, "text": n.text[:4000], "disable_web_page_preview": True})
             r.raise_for_status()
 
 
@@ -141,7 +141,8 @@ class NtfyChannel(Channel):
         if c.token:
             headers["Authorization"] = f"Bearer {c.token}"
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            r = await client.post(f"{c.server.rstrip('/')}/{c.topic}", content=n.text.encode(), headers=headers)
+            r = await client.post(f"{c.server.rstrip('/')}/{c.topic}", content=n.text.encode()[:3900],
+                                  headers=headers)
             r.raise_for_status()
 
 

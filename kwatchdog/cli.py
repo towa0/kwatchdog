@@ -349,6 +349,38 @@ def cmd_autofix(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_digest(args: argparse.Namespace) -> int:
+    """Print the daily digest now (and optionally send it through the digest channels)."""
+    from .core.daemon import Daemon, daemon_alive
+    from .core.digest import build_digest
+
+    path = _cfg_path(args)
+    wreg, creg = _registries(path)
+    try:
+        cfg = load_config(path, wreg, creg)
+    except ConfigError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    from .core.storage import Store
+
+    store = Store(cfg.settings.path("db"))
+    now = time.time()
+    last = store.kv_get("digest_last") or {}
+    since = now - args.hours * 3600 if args.hours else float(last.get("ts") or now - 86400)
+    meta = daemon_alive(store)
+    _, text = build_digest(cfg, store, now, since, cfg.digest, daemon_started=meta.get("started") if meta else None)
+    print(text)
+    if args.send:
+        async def send() -> list[str]:
+            d = Daemon(path, store=store, watcher_registry=wreg, channel_registry=creg, serve_heartbeat=False)
+            d.config = cfg
+            d.build_channels(cfg)
+            names = cfg.digest.channels or [n for n, c in cfg.channels.items() if c.type != "bell"]
+            return await d.send_to(names, "digest", "kwatchdog", "daily", Status.OK, text)
+        print("\nsent: " + (", ".join(asyncio.run(send())) or "no channels"))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="watchdog", description="kwatchdog - modular terminal monitoring")
     p.add_argument("--version", action="version", version=f"kwatchdog {__version__}")
@@ -398,6 +430,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-n", "--limit", type=int, default=30)
     s.add_argument("-v", "--verbose", action="store_true", help="show command output")
     s.set_defaults(fn=cmd_autofix)
+
+    s = sub.add_parser("digest", help="print the daily digest now (--send to deliver it)")
+    s.add_argument("--send", action="store_true", help="send through the digest channels")
+    s.add_argument("--hours", type=float, default=0, help="cover the last N hours (default: since last digest)")
+    s.set_defaults(fn=cmd_digest)
 
     s = sub.add_parser("notify-test", help="send a test notification through channels")
     s.add_argument("channel", nargs="?")

@@ -9,6 +9,10 @@ settings:
   default_interval: 60s
   default_timeout: 10s
 
+digest:                       # daily summary through the channels below
+  at: "07:30"
+  channels: [telegram]
+
 status_page:                  # read-only page + JSON API
   host: tailscale             # 127.0.0.1 (default) | lan | tailscale | an IP
   port: 8788
@@ -65,6 +69,7 @@ remediations:                  # allowlist for on_alert; argv only, never a shel
 projects:
   website:
     description: public site + API
+    slo: 99.9                   # monthly uptime budget; alerts when the burn rate says it'll be missed
     alerts: critical            # project-wide rule (name or inline overrides)
     watchers:
       - name: home

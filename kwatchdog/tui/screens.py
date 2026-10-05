@@ -375,6 +375,11 @@ class DetailScreen(Screen):
         stats.append("   p95 ", style="#8b0000")
         stats.append(ms(s24["p95"]), style="bold #ff1a1a")
         stats.append(f"   checks 24h {s24['checks']}  warn {s24['warn']}  alert {s24['alert']}", style="#8b0000")
+        budget = self.store.kv_get(f"budget:{self.key}")
+        if budget:
+            st = budget.get("state")
+            stats.append(f"\n{budget.get('text', '')}",
+                         style="bold #ff1a1a" if st in ("will-miss", "exhausted") else "#8b0000")
         self.query_one("#detail-stats", Static).update(stats)
 
         lats = self.store.latencies(self.key, 200)

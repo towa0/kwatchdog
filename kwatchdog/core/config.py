@@ -20,6 +20,7 @@ from ruamel.yaml import YAML
 from . import secrets
 from .models import Duration, Status
 from .plugin import Channel, PluginConfig, Registry, Watcher
+from .digest import DigestConfig
 from .web import StatusPageConfig, is_loopback
 
 
@@ -125,6 +126,7 @@ class Settings(BaseModel):
     log_file: str | None = "daemon.log"
     retention_days: int = 30
     autofix: bool = True  # master switch in config; `watchdog autofix off` is the runtime kill switch
+    slo_lookback: Duration = 86400.0  # burn-rate window for uptime budget projections
     default_interval: Duration = 60.0
     default_timeout: Duration = 10.0
 
@@ -204,6 +206,7 @@ class AppConfig:
     rules: dict[str, AlertRule] = field(default_factory=lambda: {"default": AlertRule()})
     remediations: dict[str, Remediation] = field(default_factory=dict)
     status_page: StatusPageConfig = field(default_factory=StatusPageConfig)
+    digest: DigestConfig = field(default_factory=DigestConfig)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -309,6 +312,14 @@ def load_config(
             cfg.errors.append(f"status_page: {msg} - status page disabled")
             cfg.status_page = StatusPageConfig(enabled=False)
 
+    # daily digest
+    try:
+        cfg.digest = DigestConfig.model_validate(raw.get("digest") or {})
+    except (ValidationError, TypeError) as e:
+        msg = _fmt_validation(e) if isinstance(e, ValidationError) else str(e)
+        cfg.errors.append(f"digest: {msg} - digest disabled")
+        cfg.digest = DigestConfig(enabled=False)
+
     # allowlisted remediation commands
     rem_raw = raw.get("remediations") or {}
     if not isinstance(rem_raw, dict):
@@ -348,6 +359,10 @@ def load_config(
             cfg.errors.append(f"projects.{pname}.depends_on: must be a list of names")
             pdeps = []
         proj.depends_on = pdeps
+        pslo = pbody.get("slo")
+        if pslo is not None and not (isinstance(pslo, (int, float)) and 0 < pslo < 100):
+            cfg.errors.append(f"projects.{pname}.slo: must be a percentage between 0 and 100, e.g. 99.9")
+            pslo = None
         try:
             proj_rule = _resolve_rule(pbody.get("alerts"), cfg.rules["default"], cfg)
         except ValueError as e:
@@ -356,6 +371,8 @@ def load_config(
         seen: set[str] = set()
         for i, wbody in enumerate(pbody.get("watchers") or []):
             spec = _load_watcher(proj, i, wbody, proj_rule, watcher_registry, cfg)
+            if spec.slo is None and pslo is not None:
+                spec.slo = float(pslo)
             if spec.name in seen:
                 spec.error = f"duplicate watcher name '{spec.name}' in project '{pname}'"
                 cfg.errors.append(spec.error)
@@ -371,6 +388,9 @@ def load_config(
             if ch not in cfg.channels:
                 cfg.errors.append(f"{w.key}: alert rule references unknown channel '{ch}'")
     _resolve_dependencies(cfg)
+    for ch in cfg.digest.channels:
+        if ch not in cfg.channels:
+            cfg.errors.append(f"digest: unknown channel '{ch}'")
     return cfg
 
 
@@ -469,6 +489,7 @@ def _load_watcher(proj: ProjectSpec, idx: int, body: Any, proj_rule: AlertRule,
     spec.retries, spec.retry_delay = common.retries, common.retry_delay
     spec.enabled, spec.description, spec.tags = common.enabled, common.description, common.tags
     spec.depends_on_raw = [common.depends_on] if isinstance(common.depends_on, str) else list(common.depends_on)
+    spec.slo = common.slo
     if common.on_alert is not None:
         try:
             spec.on_alert = OnAlert.model_validate(common.on_alert)

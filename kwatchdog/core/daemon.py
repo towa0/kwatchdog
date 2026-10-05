@@ -24,6 +24,7 @@ from .alerts import Action, AlertEngine, AlertState
 from .config import AppConfig, ChannelSpec, ConfigError, WatcherSpec, load_config
 from .models import Result, Status
 from .plugin import Channel, Notification, Registry, Watcher, WatcherContext, registries
+from .digest import Digester
 from .remediation import Remediator
 from .storage import Store
 from .web import StatusServer
@@ -86,6 +87,7 @@ class Daemon:
         self.on_notification = None  # optional callback(Notification) (embedded TUI)
         self._refreshing: set[str] = set()
         self.remediator = Remediator(self)
+        self.digester = Digester(self)
         self.status_server: StatusServer | None = None
         self._status_cfg: str | None = None
         self.dep_refresh_age = 10.0
@@ -148,17 +150,19 @@ class Daemon:
             self.specs[key] = spec
             self._start_watcher(spec)
         self.store.forget_watchers(set(new))
-        # channels: rebuild (cheap)
+        self.build_channels(cfg)
+        if old_cfg.path is not None:
+            log.info("config reloaded: %d watchers, %d channels", len(new), len(self.channels))
+            if self._bg and cfg.status_page.model_dump_json() != self._status_cfg:
+                self._bg.append(asyncio.create_task(self._ensure_status_server()))
+
+    def build_channels(self, cfg: AppConfig) -> None:
         self.channels = {}
         for name, cs in cfg.channels.items():
             if cs.config is not None and not cs.error and not cs.unavailable:
                 cls = self._registries()[1].get(cs.type)
                 if cls:
                     self.channels[name] = cls(name, cs.config)
-        if old_cfg.path is not None:
-            log.info("config reloaded: %d watchers, %d channels", len(new), len(self.channels))
-            if self._bg and cfg.status_page.model_dump_json() != self._status_cfg:
-                self._bg.append(asyncio.create_task(self._ensure_status_server()))
 
     def _start_watcher(self, spec: WatcherSpec) -> None:
         assert self.store is not None
@@ -364,19 +368,32 @@ class Daemon:
         n = Notification(kind=a.kind, project=spec.project, watcher=spec.name, status=a.status.value,
                          message=secrets.redact(message), ts=time.time(), duration_s=a.duration_s)
         targets = self._targets(a)
-        results = await asyncio.gather(*(self._send(ch, n) for ch in targets), return_exceptions=True)
-        delivered = []
-        for ch, res in zip(targets, results):
-            delivered.append(f"{ch.name}:{'ok' if res is True else 'FAIL ' + str(res)[:80]}")
+        delivered = await self._deliver(n, targets)
         if a.quiet and not targets:
             delivered.append("quiet-hours")
         self.store.add_event(spec.key, a.kind, a.status.value, n.message, ", ".join(delivered) or "no channels")
+        return delivered
+
+    async def send_to(self, names: list[str], kind: str, project: str, watcher: str, status: Status,
+                      message: str, key: str = "") -> list[str]:
+        """Send to named channels, bypassing alert routing (digest)."""
+        assert self.store is not None
+        n = Notification(kind=kind, project=project, watcher=watcher, status=status.value,
+                         message=secrets.redact(message), ts=time.time())
+        targets = [self.channels[x] for x in names if x in self.channels]
+        delivered = await self._deliver(n, targets)
+        first = message.splitlines()[0] if message else kind
+        self.store.add_event(key, kind, status.value, first[:200], ", ".join(delivered) or "no channels")
+        return delivered
+
+    async def _deliver(self, n: Notification, targets: list[Channel]) -> list[str]:
+        results = await asyncio.gather(*(self._send(ch, n) for ch in targets), return_exceptions=True)
         if self.on_notification:
             try:
                 self.on_notification(n)
             except Exception:
                 log.exception("on_notification hook failed")
-        return delivered
+        return [f"{ch.name}:{'ok' if res is True else 'FAIL ' + str(res)[:80]}" for ch, res in zip(targets, results)]
 
     def _targets(self, a: Action) -> list[Channel]:
         names = a.channels or list(self.channels)
@@ -496,6 +513,10 @@ class Daemon:
                         await self._apply_actions(spec, st, acts)
             except Exception:
                 log.exception("ticker failed")
+            try:
+                await self.digester.tick()
+            except Exception:
+                log.exception("digest/budget tick failed")
 
     async def _beat(self) -> None:
         n = 0

@@ -101,6 +101,7 @@ def build_status(daemon) -> dict[str, Any]:
                 "p95_ms_24h": _r(s24["p95"]), "muted": bool(row and row.muted(now)),
                 "disabled": bool(row and row.disabled), "flapping": bool(row and row.flapping),
                 "depends_on": list(w.depends_on), "slo": w.slo,
+                "budget": (store.kv_get(f"budget:{w.key}") or {}).get("text") if w.slo else None,
             })
         up24 = [x["uptime_24h"] for x in ws if x["uptime_24h"] is not None]
         up7 = [x["uptime_7d"] for x in ws if x["uptime_7d"] is not None]
@@ -225,7 +226,9 @@ def render_html(data: dict[str, Any], cfg: StatusPageConfig) -> str:
                 f"<div class=w>{badge(w['status'])}<span class=k>{e(w['name'])} "
                 f"<span class=muted>{e(w['type'])} {e(flags)}</span></span>"
                 f"<span class=st>{e(age)}{e(lat)} · 24h {pct(w['uptime_24h'])} · 7d {pct(w['uptime_7d'])}</span>"
-                f"<span class=msg>{e(w['message'])}</span></div>")
+                f"<span class=msg>{e(w['message'])}"
+                + (f"<br><span class=muted>{e(w['budget'])}</span>" if w.get("budget") else "")
+                + "</span></div>")
         out.append("</details>")
 
     if data["incidents"]["recent"]:

@@ -381,9 +381,10 @@ class Store:
         return dict(row) if row else None
 
     def prune(self, retention_days: int) -> None:
+        # results feed month-to-date uptime budgets: keep at least 35 days of them
+        self._x("DELETE FROM results WHERE ts < ?", (time.time() - max(retention_days, 35) * 86400,))
         cutoff = time.time() - retention_days * 86400
         self._x("DELETE FROM remediation_runs WHERE ts < ?", (cutoff,))
-        self._x("DELETE FROM results WHERE ts < ?", (cutoff,))
         self._x("DELETE FROM events WHERE ts < ?", (cutoff,))
         self._x("DELETE FROM commands WHERE done IS NOT NULL AND done < ?", (time.time() - 3600,))
         self._x("DELETE FROM incidents WHERE closed IS NOT NULL AND closed < ?", (cutoff,))

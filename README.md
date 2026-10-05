@@ -98,6 +98,7 @@ watchdog tui             # client; reads the same SQLite DB, sends commands back
 | `watchdog plugins [-v]` | list watcher and channel types, availability, options |
 | `watchdog ping NAME` | send a heartbeat locally |
 | `watchdog notify-test [CHANNEL]` | send a test notification |
+| `watchdog digest [--send] [--hours N]` | print (or send) the daily digest now |
 | `watchdog autofix on\|off\|dry-run\|status\|list\|confirm ID\|reject ID` | auto-remediation kill switch and run log |
 | `watchdog init [--force]` | write a starter config |
 
@@ -152,6 +153,8 @@ projects:
 Every watcher accepts the common keys `name`, `type`, `interval`, `timeout`,
 `retries`, `retry_delay`, `enabled`, `alerts`, `description`, `tags`,
 `depends_on`, `on_alert` and `slo` (the last three are covered below).
+Projects accept `description`, `enabled`, `alerts`, `depends_on`, `slo` and
+`watchers`.
 Everything else goes to the watcher's own schema, and unknown keys are errors,
 so typos get caught.
 
@@ -319,6 +322,72 @@ The rules:
 * **Mute** (`m` in the TUI) keeps checks and incidents running and suppresses
   notifications. **Disable** (`d`) stops the checks.
 * Channel `min_severity: ALERT` keeps WARN noise off that channel.
+
+## Daily digest + uptime budgets
+
+```yaml
+digest:
+  at: "07:30"            # local time; [] channels = every channel except bell
+  channels: [telegram]
+  stale_factor: 3        # "silently stale" = no check for 3x its interval
+
+settings:
+  slo_lookback: 24h      # burn-rate window for budget projections
+
+projects:
+  shop:
+    slo: 99.9            # monthly uptime target for every watcher in the project
+    watchers:
+      - {name: home, type: http, url: "https://shop.example.com"}
+      - {name: search, type: http, url: "https://shop.example.com/s?q=x", slo: 99.5}  # override
+```
+
+**The digest** goes out once a day through the existing channels. If the
+daemon wasn't running at that time, it goes out when the daemon starts. It
+covers the time since the previous digest:
+
+```
+kwatchdog digest · Tue 16 Jun 07:30
+now: 1 ALERT · 14 OK · 1 SLEEPING
+
+INCIDENTS last 24h00m (2)
+  ALERT web/api 03:31-03:59 (28m): connect timeout
+  WARN  scraper/log 05:02-still open (2h28m): 3 warning line(s): 429 Too Many Requests
+
+UPTIME 24h: web 99.81% · scraper 100.00% · net 100.00%
+FLAPPING: scraper/proxy
+
+SILENTLY STALE (3)
+  scraper/output: last check 5h00m ago (interval 1m00s)
+  jobs/backup: muted for 3d0h more
+  pi/nginx: not running - 'systemd' only works on linux (this is win32)
+
+UPTIME BUDGETS (month)
+  !! web/api: SLO 99.9% WILL MISS: projected 99.712% this month, 41% of 12h00m budget used, burn rate 5.2x
+
+AUTOFIX (on): 2 attempt(s), 0 failed, 0 awaiting confirm
+```
+
+"Silently stale" lists things that look fine at a glance but aren't watching
+anything: no check for longer than `stale_factor` × interval, never checked,
+muted for more than a day, disabled, config errors, and watchers switched off
+by a missing dependency or the wrong platform. Run `watchdog digest` to print
+it now (`--hours 12` for a custom window), or `watchdog digest --send` to
+deliver it.
+
+**Uptime budgets.** `slo: 99.9` allows 0.1 % of the month as downtime, which is
+43 minutes in a 30-day month. Downtime so far is estimated from month-to-date
+uptime (share of non-ALERT checks; BLOCKED and SLEEPING don't count). The rest
+of the month is projected at the burn rate of the last `slo_lookback`. The
+budget is checked hourly:
+
+* If the projection misses the target, one **ALERT** goes out (`BUDGET`
+  notification, through the watcher's alert channels). It repeats at most once
+  a day, and again if the state worsens to *exhausted*.
+* The current budget line shows in the TUI detail view, on the status page and
+  in the digest.
+* Results are kept for at least 35 days, whatever `retention_days` says, so
+  month-to-date numbers stay complete.
 
 ## Status page + JSON API (read-only)
 
