@@ -81,17 +81,19 @@ def parse_quiet_hours(spec: str) -> tuple[int, int]:
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    db: str = "~/.watchdog/watchdog.db"
-    plugins_dir: str = "~/.watchdog/plugins"
+    # relative paths resolve against $WATCHDOG_HOME (default ~/.watchdog)
+    db: str = "watchdog.db"
+    plugins_dir: str = "plugins"
     heartbeat_host: str = "127.0.0.1"
     heartbeat_port: int | None = 8787  # null disables the dead-man's-switch endpoint
-    log_file: str | None = "~/.watchdog/daemon.log"
+    log_file: str | None = "daemon.log"
     retention_days: int = 30
     default_interval: Duration = 60.0
     default_timeout: Duration = 10.0
 
     def path(self, attr: str) -> Path:
-        return Path(os.path.expandvars(getattr(self, attr))).expanduser()
+        p = Path(os.path.expandvars(getattr(self, attr))).expanduser()
+        return p if p.is_absolute() else watchdog_home() / p
 
 
 COMMON_KEYS = {"name", "type", "interval", "timeout", "retries", "retry_delay", "enabled", "alerts", "description", "tags"}
